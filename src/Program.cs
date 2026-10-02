@@ -11,7 +11,7 @@ class Program
     static void Main(string[] args)
     {
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
-        Raylib.InitWindow(1280, 720, "AlpacaEngine smoke test");
+        Raylib.InitWindow(1280, 720, "AlpacaEngine");
         Raylib.MaximizeWindow();
         Raylib.SetTargetFPS(60);
         
@@ -36,6 +36,14 @@ class Program
 
         while (!Raylib.WindowShouldClose())
         {
+            // ============================================================
+            // STAGE 0: Update camera in editor
+            // ============================================================
+            if (Raylib.IsMouseButtonDown(MouseButton.Right))
+            {
+                Raylib.UpdateCamera(ref camera, CameraMode.Free);
+            }
+
             // ============================================================
             // STAGE 1: Render the 3D Scene into the RenderTexture
             // ============================================================
@@ -106,13 +114,19 @@ class Program
             rlImGui.ImageRenderTextureFit(viewRenderTexture, false); 
                 
             ImGui.End();
-            
-            // PANEL D: Console logs
-            ImGui.Begin("Logs");
-            ImGui.LogText("there will be logs"); // FIX IT: not displayed
-            ImGui.End();
 
-            // End ImGui Processing Frame and draw metadata
+            ImGui.Begin("Assets");
+            ImGui.End();
+            
+            // PANEL E: Console logs
+            // ImGui.BeginTabBar("Commands");
+            // ImGui.TabItemButton("")
+            // ImGui.LogText("there will be logs"); // FIX IT: not displayed
+            // ImGui.EndTabBar();
+
+            // ============================================================
+            // STAGE 3: Cleanup: End ImGui Processing Frame and draw metadata
+            // ============================================================
             rlImGui.End();
 
             Raylib.EndDrawing();
