@@ -10,12 +10,19 @@ class Program
     [System.STAThread]
     static void Main(string[] args)
     {
-        Raylib.SetConfigFlags(ConfigFlags.ResizableWindow);
-        Raylib.InitWindow(1280, 720, "AlpacaEngine");
+        Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.HighDpiWindow);
+        Raylib.InitWindow(1280, 720, $"AlpacaEngine: {Editor.CurrentScene.Name}");
         Raylib.MaximizeWindow();
         Raylib.SetTargetFPS(60);
         
+        var windowScale = Raylib.GetWindowScaleDPI();
+        var dpiScale = windowScale.X; 
+        
         rlImGui.Setup(true, enableDocking: true);
+        
+        // Масштабируем элементы интерфейса (кнопки, ползунки, отступы)
+        var style = ImGui.GetStyle();
+        style.ScaleAllSizes(dpiScale);
 
         Camera3D camera = new()
         {
@@ -26,29 +33,49 @@ class Program
             Projection = CameraProjection.Perspective,
         };
         
-        // 4. Create a Render Texture for the 3D viewport panel
-        // We use a fixed or dynamic internal resolution for the 3D scene
-        var viewRenderTexture = Raylib.LoadRenderTexture(800, 600);
-
-        // 5. Stateful variables for ImGui UI adjustment
-        var gameObjects = new List<GameObject>() {new SimpleCube()};
-        var selectedGameObjectIndex = 0;
+        // ---- render texture for 3D Viewport (resolution is default here) ----
+        Editor.ViewTexture = Raylib.LoadRenderTexture(800, 600);
+        var rtWidth = 800;
+        var rtHeight = 600;
 
         while (!Raylib.WindowShouldClose())
         {
             // ============================================================
             // STAGE 0: Update camera in editor
             // ============================================================
-            if (Raylib.IsMouseButtonDown(MouseButton.Right))
+            if (Raylib.IsKeyDown(KeyboardKey.LeftAlt))
             {
                 Raylib.UpdateCamera(ref camera, CameraMode.Free);
+            }
+            
+            // ============================================================
+            // STAGE 0.5: Recreate viewport RenderTexture if panel size changed
+            // ============================================================
+            var resScale = Editor.ResScaleIndex switch
+            {
+                0 => 0.5f,
+                1 => 0.76f,
+                2 => 1f,
+                _ => Raylib.GetWindowScaleDPI().X, // HiDPI native
+            };
+
+            var targetW = Math.Clamp((int)(Editor.PendingSize.X * resScale), 64, 4096);
+            var targetH = Math.Clamp((int)(Editor.PendingSize.Y * resScale), 64, 4096);
+
+            // if difference << 8px = ignore(debounce)
+            if (Math.Abs(targetW - rtWidth) >= 8 || Math.Abs(targetH - rtHeight) >= 8)
+            {
+                Raylib.UnloadRenderTexture(Editor.ViewTexture);
+                Editor.ViewTexture = Raylib.LoadRenderTexture(targetW, targetH);
+                rtWidth = targetW;
+                rtHeight = targetH;
             }
 
             // ============================================================
             // STAGE 1: Render the 3D Scene into the RenderTexture
             // ============================================================
-            Raylib.BeginTextureMode(viewRenderTexture);
-            Raylib.ClearBackground(Color.DarkGray);
+            Raylib.BeginTextureMode(Editor.ViewTexture);
+            Raylib.ClearBackground(Color.Black);
 
             Raylib.BeginMode3D(camera);
                 
@@ -56,7 +83,7 @@ class Program
             Raylib.DrawGrid(10, 1.0f);
 
             // render 3D
-            foreach (var gameObject in gameObjects)
+            foreach (var gameObject in Editor.CurrentScene.GameObjects)
             {
                 gameObject.Render();
             }
@@ -72,51 +99,8 @@ class Program
 
             // Start ImGui Frame Processing
             rlImGui.Begin();
-            ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport());
-            
-            // TOP MENU
-            if (ImGui.BeginMainMenuBar()) {
-                if (ImGui.BeginMenu("File")) {
-                    if (ImGui.MenuItem("New")) { 
-                    }
-                    if (ImGui.MenuItem("Open", "Ctrl+O")) { 
-                    }
-                    if (ImGui.MenuItem("Save", "Ctrl+S")) {
-                    }
-                    if (ImGui.MenuItem("Save as..")) { 
-                    }
-                    ImGui.EndMenu();
-                }
-                ImGui.EndMainMenuBar();
-            }
 
-            // PANEL A: Hierarchy
-            ImGui.Begin("Hierarchy");
-            ImGui.TreeNode("Scene"); // NEED FIX: throws error if open 
-            ImGui.End();
-            
-            // PANEL B: Inspector
-            ImGui.Begin("Inspector");
-
-            ImGui.DragFloat3("Position", ref gameObjects[selectedGameObjectIndex].Position);
-            ImGui.DragFloat3("Scale", ref gameObjects[selectedGameObjectIndex].Scale);
-            
-            ImGui.End();
-
-            // PANEL C: 3D Viewport Panel (Hosts the RenderTexture)
-            ImGui.Begin("3D Viewport");
-                
-            // Read the available window size allocated by ImGui layout engine
-            Vector2 regionAvail = ImGui.GetContentRegionAvail();
-
-            // Render the Texture inside the ImGui frame window bounds
-            // Note: rlImGui handles texture flipping automatically so the Y axis aligns correctly.
-            rlImGui.ImageRenderTextureFit(viewRenderTexture, false); 
-                
-            ImGui.End();
-
-            ImGui.Begin("Assets");
-            ImGui.End();
+            Inspector.Render();
             
             // PANEL E: Console logs
             // ImGui.BeginTabBar("Commands");
@@ -133,7 +117,7 @@ class Program
         }
 
         // Cleanup resources
-        Raylib.UnloadRenderTexture(viewRenderTexture);
+        Raylib.UnloadRenderTexture(Editor.ViewTexture);
         rlImGui.Shutdown();
         Raylib.CloseWindow();
     }
