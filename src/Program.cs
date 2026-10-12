@@ -133,6 +133,8 @@ class Program
             foreach (var gameObject in Editor.CurrentScene.GameObjects)
             {
                 gameObject.Render();
+                if (Editor.Selected == gameObject)
+                    Raylib.DrawBoundingBox(gameObject.GetBoundingBox(), Color.Violet);
             }
 
             Raylib.EndMode3D();

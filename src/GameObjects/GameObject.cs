@@ -1,5 +1,6 @@
 ﻿using System.Numerics;
 using System.Text.Json.Serialization;
+using Raylib_cs;
 
 namespace AlpacaEngine;
 
@@ -20,4 +21,16 @@ public abstract class GameObject
     {
 
     }
+
+    public virtual void RenderWireframe()
+    {
+        
+    }
+    
+    public virtual BoundingBox GetBoundingBox()
+    {
+        var half = Scale / 2f;
+        return new BoundingBox(Position - half, Position + half);
+    }
+    
 }

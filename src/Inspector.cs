@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using ImGuiNET;
+using Raylib_cs;
 using rlImGui_cs;
 
 namespace AlpacaEngine;
@@ -70,8 +71,16 @@ public static class Inspector
         }
 
         rlImGui.ImageRenderTextureFit(Editor.ViewTexture, false);
-
-        var rtPos = Picking.GetMouseInViewport();
+        
+        // if viewport hovered by mouse
+        if (ImGui.IsItemHovered()
+            && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
+            && !Raylib.IsKeyDown(KeyboardKey.LeftAlt))
+        {
+            // simple way: mouse to window-pos → ray
+            var ray = Raylib.GetScreenToWorldRay(ImGui.GetMousePos(), Editor.CurrentCamera);
+            Editor.Selected = Picking.PickAtMouse(ray);
+        }
 
         ImGui.End();
     }
@@ -94,28 +103,17 @@ public static class Inspector
     {
         ImGui.Begin("Hierarchy");
 
-        if (ImGui.TreeNodeEx("Scene", ImGuiTreeNodeFlags.DefaultOpen))
+        foreach (var gameObject in Editor.CurrentScene.GameObjects)
         {
-            if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenBlockedByActiveItem) &&
-                ImGui.IsMouseReleased(ImGuiMouseButton.Right))
-            {
-                ImGui.OpenPopup("Scene context");
-            }
-            if (ImGui.BeginPopup("Scene context"))
-            {
-                ImGui.Button("Add new...");
-                ImGui.EndPopup();
-            }
-                
-            foreach (var gameObject in Editor.CurrentScene.GameObjects)
-            {
-                if (ImGui.TreeNodeEx($"{gameObject.Name}: {gameObject.Id}")) // FIX IT: remove when name will be unique
-                {
-                    Editor.Selected = gameObject;
-                    ImGui.TreePop();
-                }
-            }
-            ImGui.TreePop();
+            var flags = ImGuiTreeNodeFlags.SpanAvailWidth
+                        | ImGuiTreeNodeFlags.Leaf
+                        | (gameObject == Editor.Selected ? ImGuiTreeNodeFlags.Selected : 0);
+
+            if (ImGui.TreeNodeEx($"{gameObject.Name}##{gameObject.Id}", flags)) // ## hides rest of string from user
+                ImGui.TreePop();
+
+            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                Editor.Selected = gameObject;             // state — только на клике
         }
 
         ImGui.End();

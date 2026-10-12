@@ -9,6 +9,10 @@ public class SimpleCube : GameObject
     public override void Render()
     {
         Raylib.DrawCube(Position, Scale.X, Scale.Y, Scale.Z, cubeColor);
+    }
+
+    public override void RenderWireframe()
+    {
         Raylib.DrawCubeWires(Position, Scale.X, Scale.Y, Scale.Z, Color.Yellow);
     }
 }
