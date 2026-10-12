@@ -7,34 +7,9 @@ namespace AlpacaEngine;
 public static class Inspector
 {
     private static bool _isOpenNewProjectModal;
-    private static bool _isWelcomeModal = true;
     public static void Render()
     {
         ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport());
-
-        if (_isWelcomeModal)
-            ImGui.OpenPopup("Welcome");
-
-        if (ImGui.BeginPopupModal("Welcome", ImGuiWindowFlags.Modal))
-        {
-            ImGui.InputText("Where project located", ref Editor.workingDirectory, 256);
-            ImGui.Separator();
-            
-            if (ImGui.Button("Open"))
-            {
-                var data = File.ReadAllText($"{Editor.workingDirectory}/{Editor.workingDirectory}.proj");
-                Editor.CurrentProject =  JsonSerializer.Deserialize<Project>(data);
-                ImGui.CloseCurrentPopup();
-            }
-            ImGui.SameLine();
-
-            if (ImGui.Button("Cancel"))
-            {
-                ImGui.CloseCurrentPopup();
-            }
-            ImGui.EndPopup();
-            _isWelcomeModal = false;
-        }
             
         // TOP MENU
         DrawTopMenu();
@@ -95,6 +70,8 @@ public static class Inspector
         }
 
         rlImGui.ImageRenderTextureFit(Editor.ViewTexture, false);
+
+        var rtPos = Picking.GetMouseInViewport();
 
         ImGui.End();
     }

@@ -1,3 +1,5 @@
+using System.CommandLine;
+using System.CommandLine.Parsing;
 using System.Numerics;
 using ImGuiNET;
 using Raylib_cs;
@@ -8,7 +10,52 @@ namespace AlpacaEngine;
 class Program
 {
     [System.STAThread]
-    static void Main(string[] args)
+    static int Main(string[] args)
+    {
+        Option<string> projDirectoryOption = new("--proj")
+        {
+            Description = "Where project is located"
+        };
+        Option<string> gameModeOption = new("--game")
+        {
+            Description = "Launch as game?"
+        };
+
+        RootCommand rootCommand = new("AlpacaEngine CLI");
+        
+        rootCommand.Options.Add(projDirectoryOption);
+        rootCommand.Options.Add(gameModeOption);
+
+        rootCommand.SetAction(parseResult =>
+        {
+            var parsedProjDirectory = parseResult.GetValue(projDirectoryOption);
+            var parsedGameMode = parseResult.GetValue(gameModeOption);
+
+            if (parsedProjDirectory is not null)
+            {
+                Editor.workingDirectory = parsedProjDirectory;
+            }
+
+            if (parsedGameMode is not null)
+            {
+                StartGame();
+                return 0;
+            }
+
+            StartEditor();
+            return 0;
+        });
+
+        var parseResult = rootCommand.Parse(args);
+        return parseResult.Invoke();
+    }
+
+    private static void StartGame()
+    {
+        
+    }
+
+    private static void StartEditor()
     {
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.HighDpiWindow);
         Raylib.InitWindow(1280, 720, $"AlpacaEngine: {Editor.CurrentScene.Name}");
@@ -24,7 +71,7 @@ class Program
         var style = ImGui.GetStyle();
         style.ScaleAllSizes(dpiScale);
 
-        Camera3D camera = new()
+        Editor.CurrentCamera = new()
         {
             Position = new Vector3(5, 3, 5),
             Target = Vector3.Zero,
@@ -45,7 +92,7 @@ class Program
             // ============================================================
             if (Raylib.IsKeyDown(KeyboardKey.LeftAlt))
             {
-                Raylib.UpdateCamera(ref camera, CameraMode.Free);
+                Raylib.UpdateCamera(ref Editor.CurrentCamera, CameraMode.Free);
             }
             
             // ============================================================
@@ -77,7 +124,7 @@ class Program
             Raylib.BeginTextureMode(Editor.ViewTexture);
             Raylib.ClearBackground(Color.Black);
 
-            Raylib.BeginMode3D(camera);
+            Raylib.BeginMode3D(Editor.CurrentCamera);
                 
             // Draw grid under the cube
             Raylib.DrawGrid(10, 1.0f);

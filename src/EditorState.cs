@@ -6,8 +6,9 @@ namespace AlpacaEngine;
 public static class Editor
 {
     public static Project? CurrentProject;
-    public static Scene CurrentScene;
-    public static string workingDirectory = Directory.GetCurrentDirectory();
+    
+    public static Scene CurrentScene = new Scene();
+    public static string? workingDirectory = Directory.GetCurrentDirectory();
     
     public static GameObject? Selected;
 
@@ -16,4 +17,6 @@ public static class Editor
 
     public static RenderTexture2D ViewTexture;
     public static Vector2 PendingSize = new(800, 600);
+    
+    public static Camera3D CurrentCamera;
 }
