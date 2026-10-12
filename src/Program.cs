@@ -90,7 +90,7 @@ class Program
             // ============================================================
             // STAGE 0: Update camera in editor
             // ============================================================
-            if (Raylib.IsKeyDown(KeyboardKey.LeftAlt))
+            if (Editor.ViewportHovered && !Gizmo.IsDragging && Raylib.IsKeyDown(KeyboardKey.LeftAlt))
             {
                 Raylib.UpdateCamera(ref Editor.CurrentCamera, CameraMode.Free);
             }
@@ -133,8 +133,11 @@ class Program
             foreach (var gameObject in Editor.CurrentScene.GameObjects)
             {
                 gameObject.Render();
-                if (Editor.Selected == gameObject)
-                    Raylib.DrawBoundingBox(gameObject.GetBoundingBox(), Color.Violet);
+                
+                if (Editor.Selected != gameObject) continue;
+                
+                gameObject.RenderWireframe();
+                Raylib.DrawBoundingBox(gameObject.GetBoundingBox(), Color.Violet);
             }
 
             Raylib.EndMode3D();

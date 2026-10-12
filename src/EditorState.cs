@@ -19,4 +19,5 @@ public static class Editor
     public static Vector2 PendingSize = new(800, 600);
     
     public static Camera3D CurrentCamera;
+    public static bool ViewportHovered;
 }

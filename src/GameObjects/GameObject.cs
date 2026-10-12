@@ -29,8 +29,14 @@ public abstract class GameObject
     
     public virtual BoundingBox GetBoundingBox()
     {
-        var half = Scale / 2f;
-        return new BoundingBox(Position - half, Position + half);
+        var half = Vector3.Abs(Scale) / 2f;
+        var rotation = Matrix4x4.CreateFromQuaternion(Gizmo.Orientation(Rotation));
+        var extent = new Vector3(
+            MathF.Abs(rotation.M11) * half.X + MathF.Abs(rotation.M21) * half.Y + MathF.Abs(rotation.M31) * half.Z,
+            MathF.Abs(rotation.M12) * half.X + MathF.Abs(rotation.M22) * half.Y + MathF.Abs(rotation.M32) * half.Z,
+            MathF.Abs(rotation.M13) * half.X + MathF.Abs(rotation.M23) * half.Y + MathF.Abs(rotation.M33) * half.Z);
+        
+        return new BoundingBox(Position - extent, Position + extent);
     }
     
 }

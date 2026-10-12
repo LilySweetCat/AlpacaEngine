@@ -58,10 +58,25 @@ public static class Inspector
 
     private static void Draw3dViewport()
     {
-        ImGui.Begin("3D Viewport");
+        if (!ImGui.Begin("3D Viewport"))
+        {
+            Gizmo.Cancel();
+            Editor.ViewportHovered = false;
+            ImGui.End();
+            return;
+        }
 
         ImGui.SetNextItemWidth(180);
         ImGui.Combo("Preview Resolution", ref Editor.ResScaleIndex, Editor.ResScaleLabels, Editor.ResScaleLabels.Length);
+        var mode = (int)Gizmo.Mode;
+        ImGui.SetNextItemWidth(120);
+        if (ImGui.Combo("Gizmo", ref mode, "Move\0Rotate\0Scale\0"))
+        {
+            Gizmo.Cancel();
+            Gizmo.Mode = (Gizmo.Operation)mode;
+        }
+        ImGui.SameLine();
+        if (ImGui.Checkbox("Local", ref Gizmo.Local)) Gizmo.Cancel();
 
         if (!ImGui.IsWindowCollapsed())
         {
@@ -71,14 +86,19 @@ public static class Inspector
         }
 
         rlImGui.ImageRenderTextureFit(Editor.ViewTexture, false);
+        var hovered = ImGui.IsItemHovered();
+        Editor.ViewportHovered = hovered;
+        var mouse = Picking.GetMouseInViewport();
+        var gizmoUsed = Gizmo.Draw(Editor.Selected, Editor.CurrentCamera,
+            ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), hovered);
         
         // if viewport hovered by mouse
-        if (ImGui.IsItemHovered()
+        if (hovered && !gizmoUsed && mouse.HasValue
             && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
             && !Raylib.IsKeyDown(KeyboardKey.LeftAlt))
         {
-            // simple way: mouse to window-pos → ray
-            var ray = Raylib.GetScreenToWorldRay(ImGui.GetMousePos(), Editor.CurrentCamera);
+            var ray = Picking.ScreenPixelToRay(mouse.Value, Editor.CurrentCamera,
+                Editor.ViewTexture.Texture.Width, Editor.ViewTexture.Texture.Height);
             Editor.Selected = Picking.PickAtMouse(ray);
         }
 
@@ -93,6 +113,7 @@ public static class Inspector
         {
             ImGui.InputText("Name", ref Editor.Selected.Name, 64);
             ImGui.DragFloat3("Position", ref Editor.Selected.Position);
+            ImGui.DragFloat3("Rotation (degrees)", ref Editor.Selected.Rotation);
             ImGui.DragFloat3("Scale", ref Editor.Selected.Scale);
         }
 

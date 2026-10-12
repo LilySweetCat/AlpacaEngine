@@ -8,11 +8,24 @@ public class SimpleCube : GameObject
     
     public override void Render()
     {
-        Raylib.DrawCube(Position, Scale.X, Scale.Y, Scale.Z, cubeColor);
+        BeginTransform();
+        Raylib.DrawCube(System.Numerics.Vector3.Zero, Scale.X, Scale.Y, Scale.Z, cubeColor);
+        Rlgl.PopMatrix();
     }
 
     public override void RenderWireframe()
     {
-        Raylib.DrawCubeWires(Position, Scale.X, Scale.Y, Scale.Z, Color.Yellow);
+        BeginTransform();
+        Raylib.DrawCubeWires(System.Numerics.Vector3.Zero, Scale.X, Scale.Y, Scale.Z, Color.Yellow);
+        Rlgl.PopMatrix();
+    }
+
+    private void BeginTransform()
+    {
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(Position.X, Position.Y, Position.Z);
+        Rlgl.Rotatef(Rotation.Y, 0, 1, 0);
+        Rlgl.Rotatef(Rotation.X, 1, 0, 0);
+        Rlgl.Rotatef(Rotation.Z, 0, 0, 1);
     }
 }

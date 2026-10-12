@@ -20,25 +20,12 @@ public static class Picking
         var rtSize   = new Vector2(Editor.ViewTexture.Texture.Width, Editor.ViewTexture.Texture.Height);
         var uv       = localPos / size;
         var rtPixel  = uv * rtSize;
-        rtPixel.Y    = rtSize.Y - rtPixel.Y;
         return rtPixel;
     }
     
     public static Ray ScreenPixelToRay(Vector2 rtPixel, Camera3D cam, int rtW, int rtH)
     {
-        // NDC: [-1..1]
-        var ndc = new Vector2(rtPixel.X / rtW * 2f - 1f, rtPixel.Y / rtH * 2f - 1f);
-
-        var view = Raylib.GetCameraMatrix(cam);                                  // view-matrix
-        var proj = Raylib.GetCameraProjectionMatrix(ref cam, (float)rtW / rtH);
-        Matrix4x4.Invert(Matrix4x4.Transpose(proj * view), out var invViewProj); 
-
-        var n = Vector4.Transform(new Vector4(ndc.X, ndc.Y, -1f, 1f), invViewProj); n /= n.W; // near
-        var f = Vector4.Transform(new Vector4(ndc.X, ndc.Y,  1f, 1f), invViewProj); f /= f.W; // far
-
-        var p0 = new Vector3(n.X, n.Y, n.Z);
-        var p1 = new Vector3(f.X, f.Y, f.Z);
-        return new Ray(p0, Vector3.Normalize(p1 - p0));
+        return Raylib.GetScreenToWorldRayEx(rtPixel, cam, rtW, rtH);
     }
     
     public static GameObject? PickAtMouse(Ray ray)
@@ -48,7 +35,11 @@ public static class Picking
 
         foreach (var gameObject in Editor.CurrentScene.GameObjects)
         {
-            var collision = Raylib.GetRayCollisionBox(ray, gameObject.GetBoundingBox());
+            var inverse = Quaternion.Inverse(Gizmo.Orientation(gameObject.Rotation));
+            var localRay = new Ray(Vector3.Transform(ray.Position - gameObject.Position, inverse),
+                Vector3.Transform(ray.Direction, inverse));
+            var half = Vector3.Abs(gameObject.Scale) / 2;
+            var collision = Raylib.GetRayCollisionBox(localRay, new BoundingBox(-half, half));
             
             if (!collision.Hit || collision.Distance < 0f) continue;
             if (!(collision.Distance < bestDist)) continue;
