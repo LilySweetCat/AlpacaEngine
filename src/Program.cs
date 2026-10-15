@@ -1,6 +1,7 @@
 using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Numerics;
+using AlpacaEngine.Editor;
 using ImGuiNET;
 using Raylib_cs;
 using rlImGui_cs;
@@ -33,7 +34,7 @@ class Program
 
             if (parsedProjDirectory is not null)
             {
-                Editor.WorkingDirectory = parsedProjDirectory;
+                Editor.Editor.WorkingDirectory = parsedProjDirectory;
             }
 
             if (parsedGameMode is not null)
@@ -58,7 +59,7 @@ class Program
     private static void StartEditor()
     {
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.HighDpiWindow);
-        Raylib.InitWindow(1280, 720, $"AlpacaEngine: {Editor.CurrentScene.Name}");
+        Raylib.InitWindow(1280, 720, $"AlpacaEngine: {Editor.Editor.CurrentScene.Name}");
         
         // icon for app
         var icon = Raylib.LoadImage(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "alpaca.png"));
@@ -80,7 +81,7 @@ class Program
         var style = ImGui.GetStyle();
         style.ScaleAllSizes(dpiScale);
 
-        Editor.CurrentCamera = new()
+        Editor.Editor.CurrentCamera = new()
         {
             Position = new Vector3(5, 3, 5),
             Target = Vector3.Zero,
@@ -90,22 +91,22 @@ class Program
         };
         
         // ---- render texture for 3D Viewport (resolution is default here) ----
-        Editor.ViewTexture = Raylib.LoadRenderTexture(800, 600);
+        Editor.Editor.ViewTexture = Raylib.LoadRenderTexture(800, 600);
 
         while (!Raylib.WindowShouldClose())
         {
             // ============================================================
             // STAGE 0: Update camera in editor
             // ============================================================
-            if (Editor.ViewportHovered && !Gizmo.IsDragging && Raylib.IsMouseButtonDown(MouseButton.Right))
+            if (Editor.Editor.ViewportHovered && !Gizmo.IsDragging && Raylib.IsMouseButtonDown(MouseButton.Right))
             {
-                Raylib.UpdateCamera(ref Editor.CurrentCamera, CameraMode.Free);
+                Raylib.UpdateCamera(ref Editor.Editor.CurrentCamera, CameraMode.Free);
             }
             
             // ============================================================
             // STAGE 0.5: Recreate viewport RenderTexture if panel size changed
             // ============================================================
-            var resScale = Editor.ResScaleIndex switch
+            var resScale = Editor.Editor.ResScaleIndex switch
             {
                 0 => 0.5f,
                 1 => 0.76f,
@@ -113,29 +114,29 @@ class Program
                 _ => Raylib.GetWindowScaleDPI().X, // HiDPI native
             };
 
-            var targetW = Math.Clamp((int)(Editor.PendingSize.X * resScale), 64, 4096);
-            var targetH = Math.Clamp((int)(Editor.PendingSize.Y * resScale), 64, 4096);
+            var targetW = Math.Clamp((int)(Editor.Editor.PendingSize.X * resScale), 64, 4096);
+            var targetH = Math.Clamp((int)(Editor.Editor.PendingSize.Y * resScale), 64, 4096);
 
             // if difference << 8px = ignore(debounce)
-            if (Math.Abs(targetW - Editor.ViewTexture.Texture.Width) >= 8 || Math.Abs(targetH - Editor.ViewTexture.Texture.Height) >= 8)
+            if (Math.Abs(targetW - Editor.Editor.ViewTexture.Texture.Width) >= 8 || Math.Abs(targetH - Editor.Editor.ViewTexture.Texture.Height) >= 8)
             {
-                Raylib.UnloadRenderTexture(Editor.ViewTexture);
-                Editor.ViewTexture = Raylib.LoadRenderTexture(targetW, targetH);
+                Raylib.UnloadRenderTexture(Editor.Editor.ViewTexture);
+                Editor.Editor.ViewTexture = Raylib.LoadRenderTexture(targetW, targetH);
             }
 
             // ============================================================
             // STAGE 1: Render the 3D Scene into the RenderTexture
             // ============================================================
-            Raylib.BeginTextureMode(Editor.ViewTexture);
+            Raylib.BeginTextureMode(Editor.Editor.ViewTexture);
             Raylib.ClearBackground(Color.Black);
 
-            Raylib.BeginMode3D(Editor.CurrentCamera);
+            Raylib.BeginMode3D(Editor.Editor.CurrentCamera);
                 
             // Draw grid under the cube
             Raylib.DrawGrid(10, 1.0f);
 
             // render 3D
-            HandleGameObjectRenderingRecursively(Editor.CurrentScene.GameObjects);
+            HandleGameObjectRenderingRecursively(Editor.Editor.CurrentScene.GameObjects);
 
             Raylib.EndMode3D();
             Raylib.EndTextureMode();
@@ -162,7 +163,7 @@ class Program
 
         // Cleanup resources
         Raylib.UnloadTexture(Inspector.GameObjectIcon);
-        Raylib.UnloadRenderTexture(Editor.ViewTexture);
+        Raylib.UnloadRenderTexture(Editor.Editor.ViewTexture);
         rlImGui.Shutdown();
         Raylib.CloseWindow();
     }
@@ -180,7 +181,7 @@ class Program
             gameObject.PushTransform();
             gameObject.Render();
 
-            if (Editor.Selected == gameObject)
+            if (Editor.Editor.Selected == gameObject)
             {
                 gameObject.RenderWireframe();
                 //Raylib.DrawBoundingBox(gameObject.GetBoundingBox(), Color.Violet);

@@ -1,4 +1,4 @@
-namespace AlpacaEngine;
+namespace AlpacaEngine.Managers;
 
 public interface ICommand
 {

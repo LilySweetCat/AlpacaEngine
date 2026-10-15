@@ -1,7 +1,8 @@
 using System.Numerics;
+using AlpacaEngine.Managers;
 using Raylib_cs;
 
-namespace AlpacaEngine;
+namespace AlpacaEngine.Editor;
 
 public static class Editor
 {
