@@ -1,4 +1,5 @@
 using System.Numerics;
+using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
 using Raylib_cs;
 
@@ -28,6 +29,25 @@ public static class Editor
     public static string? WorkingDirectory = Directory.GetCurrentDirectory();
     
     public static GameObject? Selected;
+
+    public static void ValidateSelection()
+    {
+        if (Selected == null || Contains(CurrentScene.GameObjects, Selected)) return;
+
+        Gizmo.Cancel(true);
+        Inspector.FinishEdit(record: false);
+        Selected = null;
+    }
+
+    private static bool Contains(List<GameObject> objects, GameObject target)
+    {
+        foreach (var gameObject in objects)
+        {
+            if (ReferenceEquals(gameObject, target)
+                || (gameObject.Child != null && Contains(gameObject.Child, target))) return true;
+        }
+        return false;
+    }
 
     public static int ResScaleIndex = 2;
     public static readonly string[] ResScaleLabels = ["0.5x (fast)", "0.75x", "1x", "DPI scale (native)"];

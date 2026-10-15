@@ -1,7 +1,7 @@
 ﻿using System.Numerics;
 using Raylib_cs;
 
-namespace AlpacaEngine;
+namespace AlpacaEngine.GameObjects;
 
 public class SimpleCube : GameObject
 {

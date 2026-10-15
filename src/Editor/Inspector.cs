@@ -1,4 +1,6 @@
-﻿using System.Text.Json;
+﻿using System.Numerics;
+using System.Text.Json;
+using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
 using ImGuiNET;
 using Raylib_cs;
@@ -16,6 +18,7 @@ public static class Inspector
     
     public static void Render()
     {
+        Editor.ValidateSelection();
         ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport());
             
         // TOP MENU
@@ -34,7 +37,7 @@ public static class Inspector
 
         // PANEL D: Assets browser
         DrawAssetBrowser();
-        if (_editTarget != AlpacaEngine.Editor.Editor.Selected) FinishEdit();
+        if (_editTarget != Editor.Selected) FinishEdit();
 
         // Active widgets keep their own Undo (notably InputText); do not interrupt a drag.
         if (!ImGui.IsAnyItemActive() && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
@@ -43,6 +46,7 @@ public static class Inspector
             if (ImGui.IsKeyPressed(ImGuiKey.Z, false)) CommandManager.Undo();
             else if (ImGui.IsKeyPressed(ImGuiKey.Y, false)) CommandManager.Redo();
         }
+        Editor.ValidateSelection();
     }
 
     private static void DrawTopMenu()
@@ -55,8 +59,8 @@ public static class Inspector
                 if (ImGui.MenuItem("Open Project", "Ctrl+O")) {
                 }
                 if (ImGui.MenuItem("Save Project", "Ctrl+S")) {
-                    var data = JsonSerializer.Serialize(AlpacaEngine.Editor.Editor.CurrentScene);
-                    File.WriteAllText($"{Directory.GetCurrentDirectory()}/{AlpacaEngine.Editor.Editor.CurrentScene.Name}.scene", data);
+                    var data = JsonSerializer.Serialize(Editor.CurrentScene);
+                    File.WriteAllText($"{Directory.GetCurrentDirectory()}/{Editor.CurrentScene.Name}.scene", data);
                 }
                 ImGui.EndMenu();
             }
@@ -76,13 +80,13 @@ public static class Inspector
         if (!ImGui.Begin("3D Viewport"))
         {
             Gizmo.Cancel();
-            AlpacaEngine.Editor.Editor.ViewportHovered = false;
+            Editor.ViewportHovered = false;
             ImGui.End();
             return;
         }
 
         ImGui.SetNextItemWidth(180);
-        ImGui.Combo("Preview Resolution", ref AlpacaEngine.Editor.Editor.ResScaleIndex, AlpacaEngine.Editor.Editor.ResScaleLabels, AlpacaEngine.Editor.Editor.ResScaleLabels.Length);
+        ImGui.Combo("Preview Resolution", ref Editor.ResScaleIndex, Editor.ResScaleLabels, Editor.ResScaleLabels.Length);
         var mode = (int)Gizmo.Mode;
         ImGui.SetNextItemWidth(120);
         if (ImGui.Combo("Gizmo", ref mode, "Move\0Rotate\0Scale\0"))
@@ -97,14 +101,14 @@ public static class Inspector
         {
             var avail = ImGui.GetContentRegionAvail();
             if (avail is { X: >= 16, Y: >= 16 }) // min size
-                AlpacaEngine.Editor.Editor.PendingSize = avail;
+                Editor.PendingSize = avail;
         }
 
-        rlImGui.ImageRenderTextureFit(AlpacaEngine.Editor.Editor.ViewTexture, false);
+        rlImGui.ImageRenderTextureFit(Editor.ViewTexture, false);
         var hovered = ImGui.IsItemHovered();
-        AlpacaEngine.Editor.Editor.ViewportHovered = hovered;
+        Editor.ViewportHovered = hovered;
         var mouse = Picking.GetMouseInViewport();
-        var gizmoUsed = Gizmo.Draw(AlpacaEngine.Editor.Editor.Selected, AlpacaEngine.Editor.Editor.CurrentCamera,
+        var gizmoUsed = Gizmo.Draw(Editor.Selected, Editor.CurrentCamera,
             ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), hovered);
         
         // if viewport hovered by mouse
@@ -112,9 +116,9 @@ public static class Inspector
             && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
             && !Raylib.IsKeyDown(KeyboardKey.LeftAlt))
         {
-            var ray = Raylib.GetScreenToWorldRayEx(mouse.Value, AlpacaEngine.Editor.Editor.CurrentCamera,
-                AlpacaEngine.Editor.Editor.ViewTexture.Texture.Width, AlpacaEngine.Editor.Editor.ViewTexture.Texture.Height);
-            AlpacaEngine.Editor.Editor.Selected = Picking.PickAtMouse(ray);
+            var ray = Raylib.GetScreenToWorldRayEx(mouse.Value, Editor.CurrentCamera,
+                Editor.ViewTexture.Texture.Width, Editor.ViewTexture.Texture.Height);
+            Editor.Selected = Picking.PickAtMouse(ray);
         }
 
         ImGui.End();
@@ -122,7 +126,7 @@ public static class Inspector
 
     private static void DrawInspector()
     {
-        if (_editTarget != AlpacaEngine.Editor.Editor.Selected) FinishEdit();
+        if (_editTarget != Editor.Selected) FinishEdit();
         if (!ImGui.Begin("Inspector"))
         {
             FinishEdit();
@@ -130,7 +134,7 @@ public static class Inspector
             return;
         }
 
-        var target = AlpacaEngine.Editor.Editor.Selected;
+        var target = Editor.Selected;
         if (target != null)
         {
             ImGui.PushID(target.Id.ToString());
@@ -169,9 +173,9 @@ public static class Inspector
         if (ImGui.IsItemDeactivated() && _editProperty == property) FinishEdit();
     }
 
-    internal static void FinishEdit()
+    internal static void FinishEdit(bool record = true)
     {
-        _finishEdit?.Invoke();
+        if (record) _finishEdit?.Invoke();
         _finishEdit = null;
         _editTarget = null;
         _editProperty = null;
@@ -183,11 +187,18 @@ public static class Inspector
         
         if (ImGui.BeginPopupContextWindow("ctx_empty"))
         {
-            if (ImGui.MenuItem("Create Empty")) { /* add object */ }
+            if (ImGui.MenuItem("Add SimpleCube"))
+            {
+                var oldGameObjectsList = Editor.CurrentScene.GameObjects;
+                var newGameObjectsList = new List<GameObject>(oldGameObjectsList) { new SimpleCube() };
+
+                CommandManager.RecordChange(newGameObjects => Editor.CurrentScene.GameObjects = newGameObjects, oldGameObjectsList, newGameObjectsList);
+                Editor.CurrentScene.GameObjects = newGameObjectsList;
+            }
             ImGui.EndPopup();
         }
 
-        HandleDrawGameObjectTreeRecursively(AlpacaEngine.Editor.Editor.CurrentScene.GameObjects);
+        HandleDrawGameObjectTreeRecursively(Editor.CurrentScene.GameObjects);
 
         ImGui.End();
     }
@@ -199,15 +210,15 @@ public static class Inspector
             var hasChild = gameObject.Child is { Count: > 0 };
             var flags = ImGuiTreeNodeFlags.SpanAvailWidth
                         | (hasChild ? ImGuiTreeNodeFlags.OpenOnArrow : ImGuiTreeNodeFlags.Leaf)
-                        | (gameObject == AlpacaEngine.Editor.Editor.Selected ? ImGuiTreeNodeFlags.Selected : 0);
+                        | (gameObject == Editor.Selected ? ImGuiTreeNodeFlags.Selected : 0);
 
             // ## hides rest of string from user
             var opened = ImGui.TreeNodeEx($"     {gameObject.Name}##{gameObject.Id}", flags);
-            var iconMin = ImGui.GetItemRectMin() + new System.Numerics.Vector2(
+            var iconMin = ImGui.GetItemRectMin() + new Vector2(
                 ImGui.GetTreeNodeToLabelSpacing(), (ImGui.GetItemRectSize().Y - ImGui.GetFontSize()) * 0.5f);
             
             ImGui.GetWindowDrawList().AddImage((nint)GameObjectIcon.Id, iconMin,
-                iconMin + new System.Numerics.Vector2(ImGui.GetFontSize()));
+                iconMin + new Vector2(ImGui.GetFontSize()));
             
             if (ImGui.BeginPopupContextItem($"ctx_{gameObject.Id}"))
             {
@@ -219,7 +230,7 @@ public static class Inspector
             // Must be checked right after this node's header: after recursing into children,
             // "last item" is a child, so the parent would steal the selection.
             if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(ImGuiMouseButton.Left))
-                AlpacaEngine.Editor.Editor.Selected = gameObject;
+                Editor.Selected = gameObject;
 
             if (opened)
             {
@@ -236,15 +247,15 @@ public static class Inspector
 
         if (ImGui.BeginPopupModal("New Project modal", ImGuiWindowFlags.Modal))
         {
-            AlpacaEngine.Editor.Editor.CurrentProject = new Project();
-            ImGui.InputText("Project name", ref AlpacaEngine.Editor.Editor.CurrentProject.Name, 64);
-            ImGui.InputText("Where project will be", ref AlpacaEngine.Editor.Editor.WorkingDirectory, 256);
+            Editor.CurrentProject = new Project();
+            ImGui.InputText("Project name", ref Editor.CurrentProject.Name, 64);
+            ImGui.InputText("Where project will be", ref Editor.WorkingDirectory, 256);
             ImGui.Separator();
             
             if (ImGui.Button("Accept"))
             {
-                var data = JsonSerializer.Serialize(AlpacaEngine.Editor.Editor.CurrentProject);
-                File.WriteAllText($"{AlpacaEngine.Editor.Editor.WorkingDirectory}/{AlpacaEngine.Editor.Editor.CurrentProject.Name}.proj", data);
+                var data = JsonSerializer.Serialize(Editor.CurrentProject);
+                File.WriteAllText($"{Editor.WorkingDirectory}/{Editor.CurrentProject.Name}.proj", data);
                 ImGui.CloseCurrentPopup();
             }
             ImGui.SameLine();

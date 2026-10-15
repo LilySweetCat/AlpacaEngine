@@ -2,6 +2,7 @@ using System.CommandLine;
 using System.CommandLine.Parsing;
 using System.Numerics;
 using AlpacaEngine.Editor;
+using AlpacaEngine.GameObjects;
 using ImGuiNET;
 using Raylib_cs;
 using rlImGui_cs;
@@ -171,6 +172,7 @@ class Program
     private static void InitializeIcons()
     {
         Inspector.GameObjectIcon = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "gameobject.png"));
+        
         Raylib.SetTextureFilter(Inspector.GameObjectIcon, TextureFilter.Bilinear);
     }
 

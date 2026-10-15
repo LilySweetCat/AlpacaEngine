@@ -2,7 +2,7 @@
 using System.Text.Json.Serialization;
 using Raylib_cs;
 
-namespace AlpacaEngine;
+namespace AlpacaEngine.GameObjects;
 
 [JsonPolymorphic]
 [JsonDerivedType(typeof(SimpleCube), "simpleCube")]
@@ -62,7 +62,9 @@ public abstract class GameObject
     public virtual void PushTransform()
     {
         Rlgl.PushMatrix();
+        
         Rlgl.Translatef(LocalPosition.X, LocalPosition.Y, LocalPosition.Z);
+        
         Rlgl.Rotatef(LocalRotation.Y, 0, 1, 0);
         Rlgl.Rotatef(LocalRotation.X, 1, 0, 0);
         Rlgl.Rotatef(LocalRotation.Z, 0, 0, 1);
