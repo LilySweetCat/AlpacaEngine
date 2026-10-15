@@ -1,4 +1,5 @@
-﻿using System.Text.Json;
+﻿using System.Numerics;
+using System.Text.Json;
 using ImGuiNET;
 using Raylib_cs;
 using rlImGui_cs;
@@ -7,6 +8,7 @@ namespace AlpacaEngine;
 
 public static class Inspector
 {
+    internal static Texture2D GameObjectIcon;
     private static bool _isOpenNewProjectModal;
     public static void Render()
     {
@@ -97,7 +99,7 @@ public static class Inspector
             && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
             && !Raylib.IsKeyDown(KeyboardKey.LeftAlt))
         {
-            var ray = Picking.ScreenPixelToRay(mouse.Value, Editor.CurrentCamera,
+            var ray = Raylib.GetScreenToWorldRayEx(mouse.Value, Editor.CurrentCamera,
                 Editor.ViewTexture.Texture.Width, Editor.ViewTexture.Texture.Height);
             Editor.Selected = Picking.PickAtMouse(ray);
         }
@@ -112,9 +114,10 @@ public static class Inspector
         if (Editor.Selected != null)
         {
             ImGui.InputText("Name", ref Editor.Selected.Name, 64);
-            ImGui.DragFloat3("Position", ref Editor.Selected.Position);
-            ImGui.DragFloat3("Rotation (degrees)", ref Editor.Selected.Rotation);
-            ImGui.DragFloat3("Scale", ref Editor.Selected.Scale);
+
+            if(ImGui.DragFloat3("Local Position", ref Editor.Selected.LocalPosition)) CommandManager.Do(new ChangeValueCommand<Vector3>(() => ));
+            ImGui.DragFloat3("Local Rotation (degrees)", ref Editor.Selected.LocalRotation);
+            ImGui.DragFloat3("Local Scale", ref Editor.Selected.LocalScale);
         }
 
         ImGui.End();
@@ -123,21 +126,53 @@ public static class Inspector
     private static void DrawHierarchy()
     {
         ImGui.Begin("Hierarchy");
-
-        foreach (var gameObject in Editor.CurrentScene.GameObjects)
+        
+        if (ImGui.BeginPopupContextWindow("ctx_empty"))
         {
-            var flags = ImGuiTreeNodeFlags.SpanAvailWidth
-                        | ImGuiTreeNodeFlags.Leaf
-                        | (gameObject == Editor.Selected ? ImGuiTreeNodeFlags.Selected : 0);
-
-            if (ImGui.TreeNodeEx($"{gameObject.Name}##{gameObject.Id}", flags)) // ## hides rest of string from user
-                ImGui.TreePop();
-
-            if (ImGui.IsItemClicked(ImGuiMouseButton.Left))
-                Editor.Selected = gameObject;             // state — только на клике
+            if (ImGui.MenuItem("Create Empty")) { /* add object */ }
+            ImGui.EndPopup();
         }
 
+        HandleDrawGameObjectTreeRecursively(Editor.CurrentScene.GameObjects);
+
         ImGui.End();
+    }
+
+    private static void HandleDrawGameObjectTreeRecursively(List<GameObject> gameObjects)
+    {
+        foreach (var gameObject in gameObjects)
+        {
+            var hasChild = gameObject.Child is { Count: > 0 };
+            var flags = ImGuiTreeNodeFlags.SpanAvailWidth
+                        | (hasChild ? ImGuiTreeNodeFlags.OpenOnArrow : ImGuiTreeNodeFlags.Leaf)
+                        | (gameObject == Editor.Selected ? ImGuiTreeNodeFlags.Selected : 0);
+
+            // ## hides rest of string from user
+            var opened = ImGui.TreeNodeEx($"     {gameObject.Name}##{gameObject.Id}", flags);
+            var iconMin = ImGui.GetItemRectMin() + new System.Numerics.Vector2(
+                ImGui.GetTreeNodeToLabelSpacing(), ImGui.GetStyle().FramePadding.Y);
+            
+            ImGui.GetWindowDrawList().AddImage((nint)GameObjectIcon.Id, iconMin,
+                iconMin + new System.Numerics.Vector2(ImGui.GetFontSize()));
+            
+            if (ImGui.BeginPopupContextItem($"ctx_{gameObject.Id}"))
+            {
+                if (ImGui.MenuItem("Rename")) {}
+                if (ImGui.MenuItem("Delete")) {}
+                ImGui.EndPopup();
+            }
+            
+            // Must be checked right after this node's header: after recursing into children,
+            // "last item" is a child, so the parent would steal the selection.
+            if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                Editor.Selected = gameObject;
+
+            if (opened)
+            {
+                if (hasChild) HandleDrawGameObjectTreeRecursively(gameObject.Child!);
+                ImGui.TreePop();
+            }
+        }
     }
 
     private static void HandleNewProject()

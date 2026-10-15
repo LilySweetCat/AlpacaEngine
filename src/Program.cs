@@ -59,6 +59,15 @@ class Program
     {
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.HighDpiWindow);
         Raylib.InitWindow(1280, 720, $"AlpacaEngine: {Editor.CurrentScene.Name}");
+        
+        // icon for app
+        var icon = Raylib.LoadImage(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "alpaca.png"));
+        Raylib.SetWindowIcon(icon);
+        Raylib.UnloadImage(icon);
+        
+        // all icons go here 
+        InitializeIcons();
+
         Raylib.MaximizeWindow();
         Raylib.SetTargetFPS(60);
         
@@ -82,15 +91,13 @@ class Program
         
         // ---- render texture for 3D Viewport (resolution is default here) ----
         Editor.ViewTexture = Raylib.LoadRenderTexture(800, 600);
-        var rtWidth = 800;
-        var rtHeight = 600;
 
         while (!Raylib.WindowShouldClose())
         {
             // ============================================================
             // STAGE 0: Update camera in editor
             // ============================================================
-            if (Editor.ViewportHovered && !Gizmo.IsDragging && Raylib.IsKeyDown(KeyboardKey.LeftAlt))
+            if (Editor.ViewportHovered && !Gizmo.IsDragging && Raylib.IsMouseButtonDown(MouseButton.Right))
             {
                 Raylib.UpdateCamera(ref Editor.CurrentCamera, CameraMode.Free);
             }
@@ -110,12 +117,10 @@ class Program
             var targetH = Math.Clamp((int)(Editor.PendingSize.Y * resScale), 64, 4096);
 
             // if difference << 8px = ignore(debounce)
-            if (Math.Abs(targetW - rtWidth) >= 8 || Math.Abs(targetH - rtHeight) >= 8)
+            if (Math.Abs(targetW - Editor.ViewTexture.Texture.Width) >= 8 || Math.Abs(targetH - Editor.ViewTexture.Texture.Height) >= 8)
             {
                 Raylib.UnloadRenderTexture(Editor.ViewTexture);
                 Editor.ViewTexture = Raylib.LoadRenderTexture(targetW, targetH);
-                rtWidth = targetW;
-                rtHeight = targetH;
             }
 
             // ============================================================
@@ -130,15 +135,7 @@ class Program
             Raylib.DrawGrid(10, 1.0f);
 
             // render 3D
-            foreach (var gameObject in Editor.CurrentScene.GameObjects)
-            {
-                gameObject.Render();
-                
-                if (Editor.Selected != gameObject) continue;
-                
-                gameObject.RenderWireframe();
-                Raylib.DrawBoundingBox(gameObject.GetBoundingBox(), Color.Violet);
-            }
+            HandleGameObjectRenderingRecursively(Editor.CurrentScene.GameObjects);
 
             Raylib.EndMode3D();
             Raylib.EndTextureMode();
@@ -154,11 +151,6 @@ class Program
 
             Inspector.Render();
             
-            // PANEL E: Console logs
-            // ImGui.BeginTabBar("Commands");
-            // ImGui.TabItemButton("")
-            // ImGui.LogText("there will be logs"); // FIX IT: not displayed
-            // ImGui.EndTabBar();
 
             // ============================================================
             // STAGE 3: Cleanup: End ImGui Processing Frame and draw metadata
@@ -169,8 +161,34 @@ class Program
         }
 
         // Cleanup resources
+        Raylib.UnloadTexture(Inspector.GameObjectIcon);
         Raylib.UnloadRenderTexture(Editor.ViewTexture);
         rlImGui.Shutdown();
         Raylib.CloseWindow();
+    }
+
+    private static void InitializeIcons()
+    {
+        Inspector.GameObjectIcon = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "gameobject.png"));
+        Raylib.SetTextureFilter(Inspector.GameObjectIcon, TextureFilter.Bilinear);
+    }
+
+    private static void HandleGameObjectRenderingRecursively(List<GameObject> gameObjects)
+    {
+        foreach (var gameObject in gameObjects)
+        {
+            gameObject.PushTransform();
+            gameObject.Render();
+
+            if (Editor.Selected == gameObject)
+            {
+                gameObject.RenderWireframe();
+                //Raylib.DrawBoundingBox(gameObject.GetBoundingBox(), Color.Violet);
+            }
+
+            if (gameObject.Child != null) HandleGameObjectRenderingRecursively(gameObject.Child);
+
+            gameObject.PopTransform();
+        }
     }
 }

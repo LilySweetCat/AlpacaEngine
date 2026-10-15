@@ -11,11 +11,64 @@ public abstract class GameObject
     public Guid Id = Guid.NewGuid();
     public string Name = "Game Object";
 
-    public Vector3 Position = Vector3.Zero;
-    public Vector3 Scale = Vector3.One;
-    public Vector3 Rotation = Vector3.Zero;
+    public Vector3 LocalPosition = Vector3.Zero;
+    public Vector3 LocalScale = Vector3.One;
+    public Vector3 LocalRotation = Vector3.Zero;
 
-    public Guid? ParentId = null;
+    [JsonIgnore] public GameObject? Parent;
+
+    public List<GameObject>? Child
+    {
+        get;
+        set
+        {
+            field = value;
+            if (value == null) return;
+            foreach (var child in value) child.Parent = this;
+        }
+    }
+
+    public Vector3 WorldPosition => Parent == null ? LocalPosition : Vector3.Transform(LocalPosition, Parent.WorldMatrix);
+
+    // local first, then parent
+    public Quaternion WorldRotation => Orientation(LocalRotation) * (Parent?.WorldRotation ?? Quaternion.Identity);
+
+    // ponytail: componentwise; wrong for rotated non-uniform parent scale, fix with full matrix extraction if needed
+    public Vector3 WorldScale => Parent == null ? LocalScale : LocalScale * Parent.WorldScale;
+
+    public Matrix4x4 WorldMatrix
+    {
+        get
+        {
+            var local = Matrix4x4.CreateScale(LocalScale)
+                        * Matrix4x4.CreateFromQuaternion(Orientation(LocalRotation))
+                        * Matrix4x4.CreateTranslation(LocalPosition);
+            return Parent == null ? local : local * Parent.WorldMatrix;
+        }
+    }
+
+    [JsonIgnore] public Matrix4x4 WorldMatrixInverted
+    {
+        get
+        {
+            Matrix4x4.Invert(WorldMatrix, out var inverted);
+            return inverted;
+        }
+    }
+
+    public static Quaternion Orientation(Vector3 degrees) => Quaternion.CreateFromYawPitchRoll(
+        degrees.Y * MathF.PI / 180, degrees.X * MathF.PI / 180, degrees.Z * MathF.PI / 180);
+
+    public virtual void PushTransform()
+    {
+        Rlgl.PushMatrix();
+        Rlgl.Translatef(LocalPosition.X, LocalPosition.Y, LocalPosition.Z);
+        Rlgl.Rotatef(LocalRotation.Y, 0, 1, 0);
+        Rlgl.Rotatef(LocalRotation.X, 1, 0, 0);
+        Rlgl.Rotatef(LocalRotation.Z, 0, 0, 1);
+    }
+
+    public virtual void PopTransform() => Rlgl.PopMatrix();
 
     public virtual void Render()
     {
@@ -24,19 +77,18 @@ public abstract class GameObject
 
     public virtual void RenderWireframe()
     {
-        
+
     }
-    
+
     public virtual BoundingBox GetBoundingBox()
     {
-        var half = Vector3.Abs(Scale) / 2f;
-        var rotation = Matrix4x4.CreateFromQuaternion(Gizmo.Orientation(Rotation));
+        var half = Vector3.Abs(WorldScale) / 2f;
+        var rotation = Matrix4x4.CreateFromQuaternion(WorldRotation);
         var extent = new Vector3(
             MathF.Abs(rotation.M11) * half.X + MathF.Abs(rotation.M21) * half.Y + MathF.Abs(rotation.M31) * half.Z,
             MathF.Abs(rotation.M12) * half.X + MathF.Abs(rotation.M22) * half.Y + MathF.Abs(rotation.M32) * half.Z,
             MathF.Abs(rotation.M13) * half.X + MathF.Abs(rotation.M23) * half.Y + MathF.Abs(rotation.M33) * half.Z);
-        
-        return new BoundingBox(Position - extent, Position + extent);
+
+        return new BoundingBox(WorldPosition - extent, WorldPosition + extent);
     }
-    
 }

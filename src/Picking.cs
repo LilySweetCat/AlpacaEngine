@@ -23,30 +23,33 @@ public static class Picking
         return rtPixel;
     }
     
-    public static Ray ScreenPixelToRay(Vector2 rtPixel, Camera3D cam, int rtW, int rtH)
-    {
-        return Raylib.GetScreenToWorldRayEx(rtPixel, cam, rtW, rtH);
-    }
-    
+
     public static GameObject? PickAtMouse(Ray ray)
     {
         GameObject? bestGameObject = null;
         var bestDist = float.MaxValue;
 
-        foreach (var gameObject in Editor.CurrentScene.GameObjects)
-        {
-            var inverse = Quaternion.Inverse(Gizmo.Orientation(gameObject.Rotation));
-            var localRay = new Ray(Vector3.Transform(ray.Position - gameObject.Position, inverse),
-                Vector3.Transform(ray.Direction, inverse));
-            var half = Vector3.Abs(gameObject.Scale) / 2;
-            var collision = Raylib.GetRayCollisionBox(localRay, new BoundingBox(-half, half));
-            
-            if (!collision.Hit || collision.Distance < 0f) continue;
-            if (!(collision.Distance < bestDist)) continue;
-            
-            bestDist = collision.Distance;
-            bestGameObject = gameObject;
-        }
+        PickRecursive(Editor.CurrentScene.GameObjects, ray, ref bestGameObject, ref bestDist);
         return bestGameObject;
+    }
+
+    private static void PickRecursive(List<GameObject> gameObjects, Ray ray, ref GameObject? bestGameObject, ref float bestDist)
+    {
+        foreach (var gameObject in gameObjects)
+        {
+            var inverse = Quaternion.Inverse(gameObject.WorldRotation);
+            var localRay = new Ray(Vector3.Transform(ray.Position - gameObject.WorldPosition, inverse),
+                Vector3.Transform(ray.Direction, inverse));
+            var half = Vector3.Abs(gameObject.WorldScale) / 2;
+            var collision = Raylib.GetRayCollisionBox(localRay, new BoundingBox(-half, half));
+
+            if (collision.Hit && collision.Distance >= 0f && collision.Distance < bestDist)
+            {
+                bestDist = collision.Distance;
+                bestGameObject = gameObject;
+            }
+
+            if (gameObject.Child != null) PickRecursive(gameObject.Child, ray, ref bestGameObject, ref bestDist);
+        }
     }
 }
