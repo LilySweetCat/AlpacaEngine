@@ -134,6 +134,7 @@ public static class Inspector
         if (target != null)
         {
             ImGui.PushID(target.Id.ToString());
+            
             var name = target.Name;
             ImGui.InputText("Name", ref target.Name, 64);
             TrackEdit(target, nameof(target.Name), name, () => target.Name, value => target.Name = value);
@@ -141,12 +142,15 @@ public static class Inspector
             var position = target.LocalPosition;
             ImGui.DragFloat3("Local Position", ref target.LocalPosition);
             TrackEdit(target, nameof(target.LocalPosition), position, () => target.LocalPosition, value => target.LocalPosition = value);
+            
             var rotation = target.LocalRotation;
             ImGui.DragFloat3("Local Rotation (degrees)", ref target.LocalRotation);
             TrackEdit(target, nameof(target.LocalRotation), rotation, () => target.LocalRotation, value => target.LocalRotation = value);
+            
             var scale = target.LocalScale;
             ImGui.DragFloat3("Local Scale", ref target.LocalScale);
             TrackEdit(target, nameof(target.LocalScale), scale, () => target.LocalScale, value => target.LocalScale = value);
+            
             ImGui.PopID();
         }
 
