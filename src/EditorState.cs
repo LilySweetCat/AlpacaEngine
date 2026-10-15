@@ -7,8 +7,24 @@ public static class Editor
 {
     public static Project? CurrentProject;
     
-    public static Scene CurrentScene = new Scene();
-    public static string? workingDirectory = Directory.GetCurrentDirectory();
+    private static Scene _currentScene = new();
+    public static Scene CurrentScene
+    {
+        get => _currentScene;
+        set
+        {
+            ArgumentNullException.ThrowIfNull(value);
+            
+            if (ReferenceEquals(_currentScene, value)) return;
+            
+            Gizmo.Cancel(true);
+            Inspector.FinishEdit();
+            CommandManager.Clear();
+            Selected = null;
+            _currentScene = value;
+        }
+    }
+    public static string? WorkingDirectory = Directory.GetCurrentDirectory();
     
     public static GameObject? Selected;
 

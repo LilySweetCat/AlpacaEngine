@@ -79,11 +79,22 @@ public static class Gizmo
     // Ends the current drag. restore = true puts back the transform saved at drag start (Escape).
     public static void Cancel(bool restore = false)
     {
-        if (restore && _target != null)
+        var target = _target;
+        if (target != null)
         {
-            _target.LocalPosition = _localPosition;
-            _target.LocalScale = _scale;
-            _target.LocalRotation = _rotation;
+            if (restore)
+            {
+                target.LocalPosition = _localPosition;
+                target.LocalScale = _scale;
+                target.LocalRotation = _rotation;
+            }
+            else
+            {
+                CommandManager.RecordChange(
+                    value => (target.LocalPosition, target.LocalScale, target.LocalRotation) = value,
+                    (_localPosition, _scale, _rotation),
+                    (target.LocalPosition, target.LocalScale, target.LocalRotation));
+            }
         }
         _target = null;
     }

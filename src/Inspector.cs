@@ -10,6 +10,10 @@ public static class Inspector
 {
     internal static Texture2D GameObjectIcon;
     private static bool _isOpenNewProjectModal;
+    private static GameObject? _editTarget;
+    private static string? _editProperty;
+    private static Action? _finishEdit;
+    
     public static void Render()
     {
         ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport());
@@ -30,6 +34,15 @@ public static class Inspector
 
         // PANEL D: Assets browser
         DrawAssetBrowser();
+        if (_editTarget != Editor.Selected) FinishEdit();
+
+        // Active widgets keep their own Undo (notably InputText); do not interrupt a drag.
+        if (!ImGui.IsAnyItemActive() && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
+            && ImGui.GetIO().KeyCtrl)
+        {
+            if (ImGui.IsKeyPressed(ImGuiKey.Z, false)) CommandManager.Undo();
+            else if (ImGui.IsKeyPressed(ImGuiKey.Y, false)) CommandManager.Redo();
+        }
     }
 
     private static void DrawTopMenu()
@@ -109,18 +122,55 @@ public static class Inspector
 
     private static void DrawInspector()
     {
-        ImGui.Begin("Inspector");
-
-        if (Editor.Selected != null)
+        if (_editTarget != Editor.Selected) FinishEdit();
+        if (!ImGui.Begin("Inspector"))
         {
-            ImGui.InputText("Name", ref Editor.Selected.Name, 64);
+            FinishEdit();
+            ImGui.End();
+            return;
+        }
 
-            if(ImGui.DragFloat3("Local Position", ref Editor.Selected.LocalPosition)) CommandManager.Do(new ChangeValueCommand<Vector3>(() => ));
-            ImGui.DragFloat3("Local Rotation (degrees)", ref Editor.Selected.LocalRotation);
-            ImGui.DragFloat3("Local Scale", ref Editor.Selected.LocalScale);
+        var target = Editor.Selected;
+        if (target != null)
+        {
+            ImGui.PushID(target.Id.ToString());
+            var name = target.Name;
+            ImGui.InputText("Name", ref target.Name, 64);
+            TrackEdit(target, nameof(target.Name), name, () => target.Name, value => target.Name = value);
+
+            var position = target.LocalPosition;
+            ImGui.DragFloat3("Local Position", ref target.LocalPosition);
+            TrackEdit(target, nameof(target.LocalPosition), position, () => target.LocalPosition, value => target.LocalPosition = value);
+            var rotation = target.LocalRotation;
+            ImGui.DragFloat3("Local Rotation (degrees)", ref target.LocalRotation);
+            TrackEdit(target, nameof(target.LocalRotation), rotation, () => target.LocalRotation, value => target.LocalRotation = value);
+            var scale = target.LocalScale;
+            ImGui.DragFloat3("Local Scale", ref target.LocalScale);
+            TrackEdit(target, nameof(target.LocalScale), scale, () => target.LocalScale, value => target.LocalScale = value);
+            ImGui.PopID();
         }
 
         ImGui.End();
+    }
+
+    private static void TrackEdit<T>(GameObject target, string property, T before, Func<T> getValue, Action<T> setValue)
+    {
+        if (ImGui.IsItemActivated())
+        {
+            FinishEdit();
+            _editTarget = target;
+            _editProperty = property;
+            _finishEdit = () => CommandManager.RecordChange(setValue, before, getValue());
+        }
+        if (ImGui.IsItemDeactivated() && _editProperty == property) FinishEdit();
+    }
+
+    internal static void FinishEdit()
+    {
+        _finishEdit?.Invoke();
+        _finishEdit = null;
+        _editTarget = null;
+        _editProperty = null;
     }
 
     private static void DrawHierarchy()
@@ -150,7 +200,7 @@ public static class Inspector
             // ## hides rest of string from user
             var opened = ImGui.TreeNodeEx($"     {gameObject.Name}##{gameObject.Id}", flags);
             var iconMin = ImGui.GetItemRectMin() + new System.Numerics.Vector2(
-                ImGui.GetTreeNodeToLabelSpacing(), ImGui.GetStyle().FramePadding.Y);
+                ImGui.GetTreeNodeToLabelSpacing(), (ImGui.GetItemRectSize().Y - ImGui.GetFontSize()) * 0.5f);
             
             ImGui.GetWindowDrawList().AddImage((nint)GameObjectIcon.Id, iconMin,
                 iconMin + new System.Numerics.Vector2(ImGui.GetFontSize()));
@@ -184,13 +234,13 @@ public static class Inspector
         {
             Editor.CurrentProject = new Project();
             ImGui.InputText("Project name", ref Editor.CurrentProject.Name, 64);
-            ImGui.InputText("Where project will be", ref Editor.workingDirectory, 256);
+            ImGui.InputText("Where project will be", ref Editor.WorkingDirectory, 256);
             ImGui.Separator();
             
             if (ImGui.Button("Accept"))
             {
                 var data = JsonSerializer.Serialize(Editor.CurrentProject);
-                File.WriteAllText($"{Editor.workingDirectory}/{Editor.CurrentProject.Name}.proj", data);
+                File.WriteAllText($"{Editor.WorkingDirectory}/{Editor.CurrentProject.Name}.proj", data);
                 ImGui.CloseCurrentPopup();
             }
             ImGui.SameLine();

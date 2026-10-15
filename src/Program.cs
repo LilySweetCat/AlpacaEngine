@@ -33,7 +33,7 @@ class Program
 
             if (parsedProjDirectory is not null)
             {
-                Editor.workingDirectory = parsedProjDirectory;
+                Editor.WorkingDirectory = parsedProjDirectory;
             }
 
             if (parsedGameMode is not null)
