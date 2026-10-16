@@ -1,5 +1,3 @@
-using System.CommandLine;
-using System.CommandLine.Parsing;
 using System.Numerics;
 using AlpacaEngine.Editor;
 using AlpacaEngine.GameObjects;
@@ -14,42 +12,23 @@ class Program
     [System.STAThread]
     static int Main(string[] args)
     {
-        Option<string> projDirectoryOption = new("--proj")
+        // --proj <dir>  project working directory
+        // --game        launch as game instead of the editor
+        for (var i = 0; i < args.Length; i++)
         {
-            Description = "Where project is located"
-        };
-        Option<string> gameModeOption = new("--game")
-        {
-            Description = "Launch as game?"
-        };
-
-        RootCommand rootCommand = new("AlpacaEngine CLI");
-        
-        rootCommand.Options.Add(projDirectoryOption);
-        rootCommand.Options.Add(gameModeOption);
-
-        rootCommand.SetAction(parseResult =>
-        {
-            var parsedProjDirectory = parseResult.GetValue(projDirectoryOption);
-            var parsedGameMode = parseResult.GetValue(gameModeOption);
-
-            if (parsedProjDirectory is not null)
+            switch (args[i])
             {
-                Editor.Editor.WorkingDirectory = parsedProjDirectory;
+                case "--proj" when i + 1 < args.Length:
+                    EditorState.WorkingDirectory = args[++i];
+                    break;
+                case "--game":
+                    StartGame();
+                    return 0;
             }
+        }
 
-            if (parsedGameMode is not null)
-            {
-                StartGame();
-                return 0;
-            }
-
-            StartEditor();
-            return 0;
-        });
-
-        var parseResult = rootCommand.Parse(args);
-        return parseResult.Invoke();
+        StartEditor();
+        return 0;
     }
 
     private static void StartGame()
@@ -60,7 +39,7 @@ class Program
     private static void StartEditor()
     {
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.HighDpiWindow);
-        Raylib.InitWindow(1280, 720, $"AlpacaEngine: {Editor.Editor.CurrentScene.Name}");
+        Raylib.InitWindow(1280, 720, $"AlpacaEngine: {EditorState.CurrentScene.Name}");
         
         // icon for app
         var icon = Raylib.LoadImage(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "alpaca.png"));
@@ -78,11 +57,9 @@ class Program
         
         rlImGui.Setup(true, enableDocking: true);
         
-        // Масштабируем элементы интерфейса (кнопки, ползунки, отступы)
-        var style = ImGui.GetStyle();
-        style.ScaleAllSizes(dpiScale);
+        EditorTheme.Apply(dpiScale);
 
-        Editor.Editor.CurrentCamera = new()
+        EditorState.CurrentCamera = new()
         {
             Position = new Vector3(5, 3, 5),
             Target = Vector3.Zero,
@@ -92,22 +69,22 @@ class Program
         };
         
         // ---- render texture for 3D Viewport (resolution is default here) ----
-        Editor.Editor.ViewTexture = Raylib.LoadRenderTexture(800, 600);
+        EditorState.ViewTexture = Raylib.LoadRenderTexture(800, 600);
 
         while (!Raylib.WindowShouldClose())
         {
             // ============================================================
             // STAGE 0: Update camera in editor
             // ============================================================
-            if (Editor.Editor.ViewportHovered && !Gizmo.IsDragging && Raylib.IsMouseButtonDown(MouseButton.Right))
+            if (EditorState.ViewportHovered && !Gizmo.IsDragging && Raylib.IsMouseButtonDown(MouseButton.Right))
             {
-                Raylib.UpdateCamera(ref Editor.Editor.CurrentCamera, CameraMode.Free);
+                Raylib.UpdateCamera(ref EditorState.CurrentCamera, CameraMode.Free);
             }
             
             // ============================================================
             // STAGE 0.5: Recreate viewport RenderTexture if panel size changed
             // ============================================================
-            var resScale = Editor.Editor.ResScaleIndex switch
+            var resScale = EditorState.ResScaleIndex switch
             {
                 0 => 0.5f,
                 1 => 0.76f,
@@ -115,29 +92,29 @@ class Program
                 _ => Raylib.GetWindowScaleDPI().X, // HiDPI native
             };
 
-            var targetW = Math.Clamp((int)(Editor.Editor.PendingSize.X * resScale), 64, 4096);
-            var targetH = Math.Clamp((int)(Editor.Editor.PendingSize.Y * resScale), 64, 4096);
+            var targetW = Math.Clamp((int)(EditorState.PendingSize.X * resScale), 64, 4096);
+            var targetH = Math.Clamp((int)(EditorState.PendingSize.Y * resScale), 64, 4096);
 
             // if difference << 8px = ignore(debounce)
-            if (Math.Abs(targetW - Editor.Editor.ViewTexture.Texture.Width) >= 8 || Math.Abs(targetH - Editor.Editor.ViewTexture.Texture.Height) >= 8)
+            if (Math.Abs(targetW - EditorState.ViewTexture.Texture.Width) >= 8 || Math.Abs(targetH - EditorState.ViewTexture.Texture.Height) >= 8)
             {
-                Raylib.UnloadRenderTexture(Editor.Editor.ViewTexture);
-                Editor.Editor.ViewTexture = Raylib.LoadRenderTexture(targetW, targetH);
+                Raylib.UnloadRenderTexture(EditorState.ViewTexture);
+                EditorState.ViewTexture = Raylib.LoadRenderTexture(targetW, targetH);
             }
 
             // ============================================================
             // STAGE 1: Render the 3D Scene into the RenderTexture
             // ============================================================
-            Raylib.BeginTextureMode(Editor.Editor.ViewTexture);
+            Raylib.BeginTextureMode(EditorState.ViewTexture);
             Raylib.ClearBackground(Color.Black);
 
-            Raylib.BeginMode3D(Editor.Editor.CurrentCamera);
+            Raylib.BeginMode3D(EditorState.CurrentCamera);
                 
             // Draw grid under the cube
             Raylib.DrawGrid(10, 1.0f);
 
             // render 3D
-            HandleGameObjectRenderingRecursively(Editor.Editor.CurrentScene.GameObjects);
+            HandleGameObjectRenderingRecursively(EditorState.CurrentScene.GameObjects);
 
             Raylib.EndMode3D();
             Raylib.EndTextureMode();
@@ -164,13 +141,15 @@ class Program
 
         // Cleanup resources
         Raylib.UnloadTexture(Inspector.GameObjectIcon);
-        Raylib.UnloadRenderTexture(Editor.Editor.ViewTexture);
+        AssetBrowser.UnloadIcons();
+        Raylib.UnloadRenderTexture(EditorState.ViewTexture);
         rlImGui.Shutdown();
         Raylib.CloseWindow();
     }
 
     private static void InitializeIcons()
     {
+        AssetBrowser.LoadIcons();
         Inspector.GameObjectIcon = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "gameobject.png"));
         
         Raylib.SetTextureFilter(Inspector.GameObjectIcon, TextureFilter.Bilinear);
@@ -183,10 +162,9 @@ class Program
             gameObject.PushTransform();
             gameObject.Render();
 
-            if (Editor.Editor.Selected == gameObject)
+            if (EditorState.Selected == gameObject)
             {
                 gameObject.RenderWireframe();
-                //Raylib.DrawBoundingBox(gameObject.GetBoundingBox(), Color.Violet);
             }
 
             if (gameObject.Child != null) HandleGameObjectRenderingRecursively(gameObject.Child);

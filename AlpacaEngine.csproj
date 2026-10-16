@@ -14,7 +14,6 @@
       <PackageReference Include="JoltPhysicsSharp" Version="2.22.0" />
       <PackageReference Include="Raylib-cs" Version="8.1.0" />
       <PackageReference Include="rlImgui-cs" Version="3.2.0" />
-      <PackageReference Include="System.CommandLine" Version="3.0.0-rc.1.26425.128" />
     </ItemGroup>
 
     <ItemGroup>
@@ -22,6 +21,13 @@
         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       </None>
       <None Update="assets/icons/*.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+
+    <!-- The test project is nested in this folder; keep it out of this project's default item globs. -->
+    <ItemGroup>
+      <Compile Remove="AlpacaEngine.Tests/**" />
+      <None Remove="AlpacaEngine.Tests/**" />
+      <EmbeddedResource Remove="AlpacaEngine.Tests/**" />
     </ItemGroup>
 
 </Project>

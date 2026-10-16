@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Text.Json;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
@@ -15,10 +15,14 @@ public static class Inspector
     private static GameObject? _editTarget;
     private static string? _editProperty;
     private static Action? _finishEdit;
+    private static GameObject? _renameTarget;
+    private static Scene? _renameScene;
+    private static string _renameName = "";
+    private static bool _openRenamePopup;
     
     public static void Render()
     {
-        Editor.ValidateSelection();
+        EditorState.ValidateSelection();
         ImGui.DockSpaceOverViewport(0, ImGui.GetMainViewport());
             
         // TOP MENU
@@ -37,7 +41,7 @@ public static class Inspector
 
         // PANEL D: Assets browser
         DrawAssetBrowser();
-        if (_editTarget != Editor.Selected) FinishEdit();
+        if (_editTarget != EditorState.Selected) FinishEdit();
 
         // Active widgets keep their own Undo (notably InputText); do not interrupt a drag.
         if (!ImGui.IsAnyItemActive() && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
@@ -46,7 +50,7 @@ public static class Inspector
             if (ImGui.IsKeyPressed(ImGuiKey.Z, false)) CommandManager.Undo();
             else if (ImGui.IsKeyPressed(ImGuiKey.Y, false)) CommandManager.Redo();
         }
-        Editor.ValidateSelection();
+        EditorState.ValidateSelection();
     }
 
     private static void DrawTopMenu()
@@ -59,9 +63,24 @@ public static class Inspector
                 if (ImGui.MenuItem("Open Project", "Ctrl+O")) {
                 }
                 if (ImGui.MenuItem("Save Project", "Ctrl+S")) {
-                    var data = JsonSerializer.Serialize(Editor.CurrentScene);
-                    File.WriteAllText($"{Directory.GetCurrentDirectory()}/{Editor.CurrentScene.Name}.scene", data);
+                    var data = JsonSerializer.Serialize(EditorState.CurrentScene);
+                    File.WriteAllText($"{Directory.GetCurrentDirectory()}/{EditorState.CurrentScene.Name}.scene", data);
                 }
+                ImGui.EndMenu();
+            }
+            if (ImGui.BeginMenu("Edit")) {
+                // Cache availability: Undo()/Redo() change CanUndo/CanRedo mid-frame,
+                // so BeginDisabled/EndDisabled must be balanced against a snapshot.
+                var canUndo = CommandManager.CanUndo;
+                if (!canUndo) ImGui.BeginDisabled();
+                if (ImGui.MenuItem("Undo", "Ctrl+Z")) CommandManager.Undo();
+                if (!canUndo) ImGui.EndDisabled();
+
+                var canRedo = CommandManager.CanRedo;
+                if (!canRedo) ImGui.BeginDisabled();
+                if (ImGui.MenuItem("Redo", "Ctrl+Y")) CommandManager.Redo();
+                if (!canRedo) ImGui.EndDisabled();
+
                 ImGui.EndMenu();
             }
             ImGui.EndMainMenuBar();
@@ -70,9 +89,7 @@ public static class Inspector
 
     private static void DrawAssetBrowser()
     {
-        ImGui.Begin("Assets");
-
-        ImGui.End();
+        AssetBrowser.Render();
     }
 
     private static void Draw3dViewport()
@@ -80,13 +97,13 @@ public static class Inspector
         if (!ImGui.Begin("3D Viewport"))
         {
             Gizmo.Cancel();
-            Editor.ViewportHovered = false;
+            EditorState.ViewportHovered = false;
             ImGui.End();
             return;
         }
 
         ImGui.SetNextItemWidth(180);
-        ImGui.Combo("Preview Resolution", ref Editor.ResScaleIndex, Editor.ResScaleLabels, Editor.ResScaleLabels.Length);
+        ImGui.Combo("Preview Resolution", ref EditorState.ResScaleIndex, EditorState.ResScaleLabels, EditorState.ResScaleLabels.Length);
         var mode = (int)Gizmo.Mode;
         ImGui.SetNextItemWidth(120);
         if (ImGui.Combo("Gizmo", ref mode, "Move\0Rotate\0Scale\0"))
@@ -101,14 +118,14 @@ public static class Inspector
         {
             var avail = ImGui.GetContentRegionAvail();
             if (avail is { X: >= 16, Y: >= 16 }) // min size
-                Editor.PendingSize = avail;
+                EditorState.PendingSize = avail;
         }
 
-        rlImGui.ImageRenderTextureFit(Editor.ViewTexture, false);
+        rlImGui.ImageRenderTextureFit(EditorState.ViewTexture, false);
         var hovered = ImGui.IsItemHovered();
-        Editor.ViewportHovered = hovered;
+        EditorState.ViewportHovered = hovered;
         var mouse = Picking.GetMouseInViewport();
-        var gizmoUsed = Gizmo.Draw(Editor.Selected, Editor.CurrentCamera,
+        var gizmoUsed = Gizmo.Draw(EditorState.Selected, EditorState.CurrentCamera,
             ImGui.GetItemRectMin(), ImGui.GetItemRectMax(), hovered);
         
         // if viewport hovered by mouse
@@ -116,17 +133,24 @@ public static class Inspector
             && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
             && !Raylib.IsKeyDown(KeyboardKey.LeftAlt))
         {
-            var ray = Raylib.GetScreenToWorldRayEx(mouse.Value, Editor.CurrentCamera,
-                Editor.ViewTexture.Texture.Width, Editor.ViewTexture.Texture.Height);
-            Editor.Selected = Picking.PickAtMouse(ray);
+            var ray = Raylib.GetScreenToWorldRayEx(mouse.Value, EditorState.CurrentCamera,
+                EditorState.ViewTexture.Texture.Width, EditorState.ViewTexture.Texture.Height);
+            EditorState.Selected = Picking.PickAtMouse(ray);
         }
+
+        if (ImGui.IsWindowFocused() && !ImGui.IsAnyItemActive()
+            && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
+            && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId)
+            && ImGui.IsKeyPressed(ImGuiKey.Delete, false)
+            && EditorState.Selected != null)
+            EditorState.DeleteGameObject(EditorState.Selected);
 
         ImGui.End();
     }
 
     private static void DrawInspector()
     {
-        if (_editTarget != Editor.Selected) FinishEdit();
+        if (_editTarget != EditorState.Selected) FinishEdit();
         if (!ImGui.Begin("Inspector"))
         {
             FinishEdit();
@@ -134,7 +158,7 @@ public static class Inspector
             return;
         }
 
-        var target = Editor.Selected;
+        var target = EditorState.Selected;
         if (target != null)
         {
             ImGui.PushID(target.Id.ToString());
@@ -183,37 +207,53 @@ public static class Inspector
 
     private static void DrawHierarchy()
     {
-        ImGui.Begin("Hierarchy");
+        if (!ImGui.Begin("Hierarchy"))
+        {
+            ImGui.End();
+            return;
+        }
         
-        if (ImGui.BeginPopupContextWindow("ctx_empty"))
+        if (ImGui.BeginPopupContextWindow("ctx_empty", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
         {
             if (ImGui.MenuItem("Add SimpleCube"))
             {
-                var oldGameObjectsList = Editor.CurrentScene.GameObjects;
+                var oldGameObjectsList = EditorState.CurrentScene.GameObjects;
                 var newGameObjectsList = new List<GameObject>(oldGameObjectsList) { new SimpleCube() };
 
-                CommandManager.RecordChange(newGameObjects => Editor.CurrentScene.GameObjects = newGameObjects, oldGameObjectsList, newGameObjectsList);
-                Editor.CurrentScene.GameObjects = newGameObjectsList;
+                CommandManager.RecordChange(newGameObjects => EditorState.CurrentScene.GameObjects = newGameObjects, oldGameObjectsList, newGameObjectsList);
+                EditorState.CurrentScene.GameObjects = newGameObjectsList;
             }
             ImGui.EndPopup();
         }
 
-        HandleDrawGameObjectTreeRecursively(Editor.CurrentScene.GameObjects);
+        GameObject? deleteTarget = null;
+        HandleDrawGameObjectTreeRecursively(EditorState.CurrentScene.GameObjects, ref deleteTarget);
+        if (ImGui.IsWindowFocused() && !ImGui.IsAnyItemActive()
+            && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
+            && !_openRenamePopup && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId)
+            && ImGui.IsKeyPressed(ImGuiKey.Delete, false))
+            deleteTarget = EditorState.Selected;
+        if (deleteTarget != null) EditorState.DeleteGameObject(deleteTarget);
+        DrawRenamePopup();
 
         ImGui.End();
     }
 
-    private static void HandleDrawGameObjectTreeRecursively(List<GameObject> gameObjects)
+    private static void HandleDrawGameObjectTreeRecursively(List<GameObject> gameObjects, ref GameObject? deleteTarget)
     {
         foreach (var gameObject in gameObjects)
         {
             var hasChild = gameObject.Child is { Count: > 0 };
             var flags = ImGuiTreeNodeFlags.SpanAvailWidth
                         | (hasChild ? ImGuiTreeNodeFlags.OpenOnArrow : ImGuiTreeNodeFlags.Leaf)
-                        | (gameObject == Editor.Selected ? ImGuiTreeNodeFlags.Selected : 0);
+                        | (gameObject == EditorState.Selected ? ImGuiTreeNodeFlags.Selected : 0);
 
             // ## hides rest of string from user
-            var opened = ImGui.TreeNodeEx($"     {gameObject.Name}##{gameObject.Id}", flags);
+            var opened = ImGui.TreeNodeEx($"   {gameObject.Name}###{gameObject.Id}", flags);
+            
+            if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(ImGuiMouseButton.Left))
+                EditorState.Selected = gameObject;
+            
             var iconMin = ImGui.GetItemRectMin() + new Vector2(
                 ImGui.GetTreeNodeToLabelSpacing(), (ImGui.GetItemRectSize().Y - ImGui.GetFontSize()) * 0.5f);
             
@@ -222,22 +262,70 @@ public static class Inspector
             
             if (ImGui.BeginPopupContextItem($"ctx_{gameObject.Id}"))
             {
-                if (ImGui.MenuItem("Rename")) {}
-                if (ImGui.MenuItem("Delete")) {}
+                if (ImGui.MenuItem("Rename"))
+                {
+                    FinishEdit();
+                    EditorState.Selected = gameObject;
+                    _renameTarget = gameObject;
+                    _renameScene = EditorState.CurrentScene;
+                    _renameName = gameObject.Name;
+                    _openRenamePopup = true;
+                }
+
+                if (ImGui.MenuItem("Delete", "Del"))
+                {
+                    // Apply after the entire tree has been drawn, never during enumeration.
+                    deleteTarget = gameObject;
+                }
                 ImGui.EndPopup();
             }
             
-            // Must be checked right after this node's header: after recursing into children,
-            // "last item" is a child, so the parent would steal the selection.
-            if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(ImGuiMouseButton.Left))
-                Editor.Selected = gameObject;
-
             if (opened)
             {
-                if (hasChild) HandleDrawGameObjectTreeRecursively(gameObject.Child!);
+                if (hasChild) HandleDrawGameObjectTreeRecursively(gameObject.Child!, ref deleteTarget);
                 ImGui.TreePop();
             }
         }
+    }
+
+    private static void DrawRenamePopup()
+    {
+        var focusName = _openRenamePopup;
+        if (_openRenamePopup)
+        {
+            ImGui.OpenPopup("Rename Game Object");
+            _openRenamePopup = false;
+        }
+
+        if (!ImGui.BeginPopupModal("Rename Game Object", ImGuiWindowFlags.AlwaysAutoResize)) return;
+
+        if (_renameTarget == null || _renameScene != EditorState.CurrentScene
+            || !EditorState.Contains(EditorState.CurrentScene.GameObjects, _renameTarget))
+        {
+            _renameTarget = null;
+            _renameScene = null;
+            ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+            return;
+        }
+
+        if (focusName) ImGui.SetKeyboardFocusHere();
+        var submitted = ImGui.InputText("Name", ref _renameName, 256,
+            ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+        var valid = !string.IsNullOrWhiteSpace(_renameName);
+        ImGui.BeginDisabled(!valid);
+        var accept = ImGui.Button("Rename") || submitted;
+        ImGui.EndDisabled();
+        ImGui.SameLine();
+        var cancel = ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape, false);
+        if ((accept && valid) || cancel)
+        {
+            if (!cancel) EditorState.RenameGameObject(_renameTarget, _renameName);
+            _renameTarget = null;
+            _renameScene = null;
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.EndPopup();
     }
 
     private static void HandleNewProject()
@@ -247,15 +335,15 @@ public static class Inspector
 
         if (ImGui.BeginPopupModal("New Project modal", ImGuiWindowFlags.Modal))
         {
-            Editor.CurrentProject = new Project();
-            ImGui.InputText("Project name", ref Editor.CurrentProject.Name, 64);
-            ImGui.InputText("Where project will be", ref Editor.WorkingDirectory, 256);
+            EditorState.CurrentProject = new Project();
+            ImGui.InputText("Project name", ref EditorState.CurrentProject.Name, 64);
+            ImGui.InputText("Where project will be", ref EditorState.WorkingDirectory, 256);
             ImGui.Separator();
             
             if (ImGui.Button("Accept"))
             {
-                var data = JsonSerializer.Serialize(Editor.CurrentProject);
-                File.WriteAllText($"{Editor.WorkingDirectory}/{Editor.CurrentProject.Name}.proj", data);
+                var data = JsonSerializer.Serialize(EditorState.CurrentProject);
+                File.WriteAllText($"{EditorState.WorkingDirectory}/{EditorState.CurrentProject.Name}.proj", data);
                 ImGui.CloseCurrentPopup();
             }
             ImGui.SameLine();

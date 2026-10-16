@@ -18,7 +18,7 @@ public static class Picking
         
         if (localPos.X < 0 || localPos.Y < 0 || localPos.X > size.X || localPos.Y > size.Y) return null;
         
-        var rtSize   = new Vector2(AlpacaEngine.Editor.Editor.ViewTexture.Texture.Width, AlpacaEngine.Editor.Editor.ViewTexture.Texture.Height);
+        var rtSize   = new Vector2(EditorState.ViewTexture.Texture.Width, EditorState.ViewTexture.Texture.Height);
         var uv       = localPos / size;
         var rtPixel  = uv * rtSize;
         return rtPixel;
@@ -30,7 +30,7 @@ public static class Picking
         GameObject? bestGameObject = null;
         var bestDist = float.MaxValue;
 
-        PickRecursive(AlpacaEngine.Editor.Editor.CurrentScene.GameObjects, ray, ref bestGameObject, ref bestDist);
+        PickRecursive(EditorState.CurrentScene.GameObjects, ray, ref bestGameObject, ref bestDist);
         return bestGameObject;
     }
 

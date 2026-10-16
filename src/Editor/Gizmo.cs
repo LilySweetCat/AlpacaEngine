@@ -116,7 +116,7 @@ public static class Gizmo
         if (selected != _target && IsDragging) Cancel();
         if (selected == null || size.X < 1 || size.Y < 1) { Cancel(); return false; }
         var mouse = ImGui.GetMousePos();
-        var texture = AlpacaEngine.Editor.Editor.ViewTexture.Texture;
+        var texture = EditorState.ViewTexture.Texture;
         // Mouse in viewport-image pixels mapped to render-texture pixels, then to a world ray.
         var ray = Raylib.GetScreenToWorldRayEx((mouse - min) / size * new Vector2(texture.Width, texture.Height),
             camera, texture.Width, texture.Height);

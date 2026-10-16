@@ -1,5 +1,7 @@
-﻿/obj
-/bin
+﻿obj/
+bin/
 /.idea
 /AlpacaEngine.sln.DotSettings.user
 /scripts/Generate-Icons.ps1
+.DS_Store
+__MACOSX/
