@@ -27,6 +27,7 @@ public static class Gizmo
 
     // Rotate хранит угол как кватернион, а объект — как градусы Эйлера.
     // При pitch ≈ ±90° yaw и roll совпадают: фиксируем roll = 0.
+    // TODO: to extention method for Quaternion
     public static Vector3 EulerDegrees(Quaternion quaternion)
     {
         var m = Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(quaternion));
@@ -35,11 +36,10 @@ public static class Gizmo
         var yaw = MathF.Atan2(m.M31, m.M33);
         var roll = MathF.Atan2(m.M12, m.M22);
 
-        if (MathF.Abs(MathF.Cos(pitch)) < 0.0001f)
-        {
-            yaw = MathF.Atan2(-m.M13, m.M11);
-            roll = 0;
-        }
+        if (!(MathF.Abs(MathF.Cos(pitch)) < 0.0001f)) return new Vector3(pitch, yaw, roll) * (180 / MathF.PI);
+
+        yaw = MathF.Atan2(-m.M13, m.M11);
+        roll = 0;
         return new Vector3(pitch, yaw, roll) * (180 / MathF.PI);
     }
 
@@ -98,13 +98,7 @@ public static class Gizmo
     // true означает: клик занят gizmo, viewport не должен выбирать другой объект (включая кадр отпускания).
     public static bool Draw(GameObject? selected, Camera3D camera, Vector2 min, Vector2 max, bool hovered)
     {
-        // Переключение режима W/E/R не прерывает жест и ввод текста.
-        if (!IsDragging && !ImGui.GetIO().WantTextInput)
-        {
-            if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = Operation.Move;
-            if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = Operation.Rotate;
-            if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = Operation.Scale;
-        }
+        HandleHotkeys();
 
         var size = max - min;
 
@@ -125,35 +119,27 @@ public static class Gizmo
             else if (!ImGui.IsMouseDown(ImGuiMouseButton.Left)) Cancel();
             else if (IntersectPlane(ray, _position, _planeNormal, out var hit))
             {
-                // Move: стрелка оставляет лишь смещение вдоль оси; квадрат между осями берёт всё смещение в плоскости.
-                if (Mode == Operation.Move)
+                switch (Mode)
                 {
-                    var worldPosition = _position + (_axis >= 3 ? hit - _startHit :
-                        _direction * Vector3.Dot(hit - _startHit, _direction));
-
-                    // Родительский transform требует перевести мировую позицию обратно в локальную.
-                    selected.LocalPosition = selected.Parent == null
-                        ? worldPosition : Vector3.Transform(worldPosition, _parentWorldInv);
-                }
-                // Scale: сдвиг на половину длины ручки даёт множитель 1.5; меняем только выбранную компоненту.
-                else if (Mode == Operation.Scale)
-                {
-                    var factor = MathF.Max(0.01f, 1 + Vector3.Dot(hit - _startHit, _direction) / _length);
-                    var scale = _scale;
-
-                    scale[_axis] = MathF.Max(0.001f, _scale[_axis] * factor);
-                    selected.LocalScale = scale;
-                }
-                // Rotate: угол между начальной и текущей точками относительно центра кольца.
-                else if ((hit - _position).LengthSquared() > 0.000001f)
-                {
-                    var angle = SignedAngle(_startHit - _position, hit - _position, _direction);
-
-                    // Накопление небольших приращений позволяет пройти границу ±180° и сделать полный оборот.
-                    _angle += MathF.IEEERemainder(angle - _lastAngle, 2 * MathF.PI);
-                    _lastAngle = angle;
-                    selected.LocalRotation = EulerDegrees(Quaternion.CreateFromAxisAngle(_direction, _angle)
-                        * GameObject.Orientation(_rotation));
+                    // Move: стрелка оставляет лишь смещение вдоль оси; квадрат между осями берёт всё смещение в плоскости.
+                    case Operation.Move:
+                    {
+                        HandleMove(selected, hit);
+                        break;
+                    }
+                    // Scale: сдвиг на половину длины ручки даёт множитель 1.5; меняем только выбранную компоненту.
+                    case Operation.Scale:
+                    {
+                        HandleScale(selected, hit);
+                        break;
+                    }
+                    // Rotate: угол между начальной и текущей точками относительно центра кольца.
+                    case Operation.Rotate:
+                    default:
+                    {
+                        HandleRotateOrDefault(selected, hit);
+                        break;
+                    }
                 }
             }
         }
@@ -174,49 +160,18 @@ public static class Gizmo
         // Scale всегда вдоль локальных осей; Move/Rotate — вдоль мировых, если Local выключен.
         var local = Local || Mode == Operation.Scale;
 
-        Vector3 Axis(int i) => local ? Vector3.Transform(UnitAxis(i), rotation) : UnitAxis(i);
-        // Проекция мировой точки на изображение viewport (с учётом его размера в UI).
-        Vector2 Project(Vector3 p) => min + Raylib.GetWorldToScreenEx(p, camera, texture.Width, texture.Height)
-            / new Vector2(texture.Width, texture.Height) * size;
-        // Кольцо Rotate: 64 экранных отрезка в плоскости поперёк оси; последняя точка замыкает кольцо.
-        Vector2[] Ring(int axisIndex)
-        {
-            var u = Axis((axisIndex + 1) % 3);
-            var v = Axis((axisIndex + 2) % 3);
-            var points = new Vector2[65];
-            for (var j = 0; j <= 64; j++)
-                points[j] = Project(world + length * (u * MathF.Cos(j * MathF.Tau / 64) + v * MathF.Sin(j * MathF.Tau / 64)));
-            return points;
-        }
-
         var origin = Project(world);
-        var draw = ImGui.GetWindowDrawList();
+        var drawList = ImGui.GetWindowDrawList();
 
-        draw.PushClipRect(min, max, true);
+        drawList.PushClipRect(min, max, true);
 
         // Ищем ближайшую ручку в пределах 9 пикселей; индексы осей и плоскостей указаны выше.
         var nearestDistance = 9f;
         var hoveredHandle = -1;
 
-        // Квадраты Move между двумя осями: попадание проверяем внутри экранного четырёхугольника.
-        if (Mode == Operation.Move)
-        {
-            for (var i = 0; i < 3; i++)
-            {
-                var u = Axis((i + 1) % 3);
-                var v = Axis((i + 2) % 3);
-                var a = Project(world + length * (u + v) * 0.25f);
-                var b = Project(world + length * (u * 0.45f + v * 0.25f));
-                var c = Project(world + length * (u + v) * 0.45f);
-                var d = Project(world + length * (u * 0.25f + v * 0.45f));
-
-                if (InsideQuad(mouse, a, b, c, d)) { hoveredHandle = i + 3; nearestDistance = 0; }
-
-                var color = (IsDragging ? _axis == i + 3 : hovered && hoveredHandle == i + 3)
-                    ? 0x9955ffffu : (Colors[i] & 0x00ffffff) | 0x55000000;
-                draw.AddQuadFilled(a, b, c, d, color);
-            }
-        }
+        // Квадраты Move проверяются раньше осей и выигрывают при попадании внутрь.
+        if (Mode == Operation.Move) DrawMovePlanes();
+        
         // Кольца и оси проверяем по расстоянию в пикселях UI, независимо от разрешения render texture.
         for (var i = 0; i < 3; i++)
         {
@@ -228,7 +183,9 @@ public static class Gizmo
                 {
                     var distance = SegmentDistance(mouse, ring[j], ring[j + 1]);
 
-                    if (distance < nearestDistance) { nearestDistance = distance; hoveredHandle = i; }
+                    if (!(distance < nearestDistance)) continue;
+
+                    nearestDistance = distance; hoveredHandle = i;
                 }
             }
             else
@@ -241,7 +198,9 @@ public static class Gizmo
                 // Первые 18% стрелки оставляем для клика по самому объекту.
                 var distance = SegmentDistance(mouse, Vector2.Lerp(origin, end, 0.18f), end);
 
-                if (distance < nearestDistance) { nearestDistance = distance; hoveredHandle = i; }
+                if (!(distance < nearestDistance)) continue;
+
+                nearestDistance = distance; hoveredHandle = i;
             }
         }
         // Alt нужен для вращения камеры, поэтому ручки в этот момент не захватывают мышь.
@@ -252,33 +211,16 @@ public static class Gizmo
         {
             var color = (IsDragging ? _axis == i : hoveredHandle == i) ? 0xff55ffffu : Colors[i];
 
-            if (Mode == Operation.Rotate)
+            switch (Mode)
             {
-                var ring = Ring(i);
-
-                for (var j = 0; j < 64; j++) draw.AddLine(ring[j], ring[j + 1], color, 2);
-            }
-            else
-            {
-                var end = Project(world + Axis(i) * length);
-
-                if (Vector2.Distance(origin, end) < 12) continue;
-                draw.AddLine(origin, end, color, 3);
-
-                // Квадратный конец у Scale, наконечник стрелки у Move.
-                if (Mode == Operation.Scale) draw.AddRectFilled(end - new Vector2(5), end + new Vector2(5), color);
-                else
-                {
-                    var direction = Vector2.Normalize(end - origin);
-                    var side = new Vector2(-direction.Y, direction.X) * 5;
-
-                    draw.AddTriangleFilled(end, end - direction * 12 + side, end - direction * 12 - side, color);
-                }
+                case Operation.Move: DrawMove(i, color); break;
+                case Operation.Rotate: DrawRotate(i, color); break;
+                case Operation.Scale: DrawScale(i, color); break;
             }
         }
 
-        draw.AddCircleFilled(origin, 3, 0xffffffff);
-        draw.PopClipRect();
+        drawList.AddCircleFilled(origin, 3, 0xffffffff);
+        drawList.PopClipRect();
 
         // Шаг 2: при клике запоминаем исходный transform, точку мыши в 3D и плоскость жеста.
         if (!consumed && hoveredHandle >= 0 && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
@@ -301,8 +243,7 @@ public static class Gizmo
                 _startHit = hit;
                 _position = world;
                 _localPosition = selected.LocalPosition;
-                _parentWorldInv = selected.Parent == null ? Matrix4x4.Identity
-                    : selected.Parent.WorldMatrixInverted;
+                _parentWorldInv = selected.Parent?.WorldMatrixInverted ?? Matrix4x4.Identity;
                 _scale = selected.LocalScale;
                 _rotation = selected.LocalRotation;
                 _length = length;
@@ -311,6 +252,110 @@ public static class Gizmo
             consumed = true;
         }
         return consumed;
+
+        // Проекция мировой точки на изображение viewport (с учётом его размера в UI).
+        Vector2 Project(Vector3 p) => min + Raylib.GetWorldToScreenEx(p, camera, texture.Width, texture.Height)
+            / new Vector2(texture.Width, texture.Height) * size;
+
+        // Кольцо Rotate: 64 экранных отрезка в плоскости поперёк оси; последняя точка замыкает кольцо.
+        Vector2[] Ring(int axisIndex)
+        {
+            var u = Axis((axisIndex + 1) % 3);
+            var v = Axis((axisIndex + 2) % 3);
+            var points = new Vector2[65];
+            for (var j = 0; j <= 64; j++)
+                points[j] = Project(world + length * (u * MathF.Cos(j * MathF.Tau / 64) + v * MathF.Sin(j * MathF.Tau / 64)));
+            return points;
+        }
+
+        Vector3 Axis(int i) => local ? Vector3.Transform(UnitAxis(i), rotation) : UnitAxis(i);
+
+        void DrawMovePlanes()
+        {
+            for (var i = 0; i < 3; i++)
+            {
+                var u = Axis((i + 1) % 3);
+                var v = Axis((i + 2) % 3);
+                
+                var a = Project(world + length * (u + v) * 0.25f);
+                var b = Project(world + length * (u * 0.45f + v * 0.25f));
+                var c = Project(world + length * (u + v) * 0.45f);
+                var d = Project(world + length * (u * 0.25f + v * 0.45f));
+
+                if (InsideQuad(mouse, a, b, c, d)) { hoveredHandle = i + 3; nearestDistance = 0; }
+
+                var color = (IsDragging ? _axis == i + 3 : hovered && hoveredHandle == i + 3)
+                    ? 0x9955ffffu : (Colors[i] & 0x00ffffff) | 0x55000000;
+                drawList.AddQuadFilled(a, b, c, d, color);
+            }
+        }
+
+        void DrawMove(int i, uint color)
+        {
+            var end = Project(world + Axis(i) * length);
+            if (Vector2.Distance(origin, end) < 12) return;
+            drawList.AddLine(origin, end, color, 3);
+
+            var direction = Vector2.Normalize(end - origin);
+            var side = new Vector2(-direction.Y, direction.X) * 5;
+            drawList.AddTriangleFilled(end, end - direction * 12 + side, end - direction * 12 - side, color);
+        }
+
+        void DrawRotate(int i, uint color)
+        {
+            var ring = Ring(i);
+            for (var j = 0; j < 64; j++) drawList.AddLine(ring[j], ring[j + 1], color, 2);
+        }
+
+        void DrawScale(int i, uint color)
+        {
+            var end = Project(world + Axis(i) * length);
+            if (Vector2.Distance(origin, end) < 12) return;
+            drawList.AddLine(origin, end, color, 3);
+            drawList.AddRectFilled(end - new Vector2(5), end + new Vector2(5), color);
+        }
+    }
+
+    private static void HandleRotateOrDefault(GameObject selected, Vector3 hit)
+    {
+        if (!((hit - _position).LengthSquared() > 0.000001f)) return;
+
+        var angle = SignedAngle(_startHit - _position, hit - _position, _direction);
+
+        // Накопление небольших приращений позволяет пройти границу ±180° и сделать полный оборот.
+        _angle += MathF.IEEERemainder(angle - _lastAngle, 2 * MathF.PI);
+        _lastAngle = angle;
+        selected.LocalRotation = EulerDegrees(Quaternion.CreateFromAxisAngle(_direction, _angle)
+                                              * GameObject.Orientation(_rotation));
+    }
+
+    private static void HandleScale(GameObject selected, Vector3 hit)
+    {
+        var factor = MathF.Max(0.01f, 1 + Vector3.Dot(hit - _startHit, _direction) / _length);
+        var scale = _scale;
+
+        scale[_axis] = MathF.Max(0.001f, _scale[_axis] * factor);
+        selected.LocalScale = scale;
+    }
+
+    private static void HandleMove(GameObject selected, Vector3 hit)
+    {
+        var worldPosition = _position + (_axis >= 3 ? hit - _startHit :
+            _direction * Vector3.Dot(hit - _startHit, _direction));
+
+        // Родительский transform требует перевести мировую позицию обратно в локальную.
+        selected.LocalPosition = selected.Parent == null
+            ? worldPosition : Vector3.Transform(worldPosition, _parentWorldInv);
+    }
+
+    private static void HandleHotkeys()
+    {
+        // Переключение режима W/E/R не прерывает жест и ввод текста.
+        if (IsDragging || ImGui.GetIO().WantTextInput) return;
+
+        if (ImGui.IsKeyPressed(ImGuiKey.W)) Mode = Operation.Move;
+        if (ImGui.IsKeyPressed(ImGuiKey.E)) Mode = Operation.Rotate;
+        if (ImGui.IsKeyPressed(ImGuiKey.R)) Mode = Operation.Scale;
     }
 
     private static Vector3 UnitAxis(int axis) => axis switch { 0 => Vector3.UnitX, 1 => Vector3.UnitY, _ => Vector3.UnitZ };
@@ -318,9 +363,6 @@ public static class Gizmo
     // Попадание курсора внутрь выпуклого квадрата Move, независимо от порядка обхода вершин.
     private static bool InsideQuad(Vector2 point, Vector2 a, Vector2 b, Vector2 c, Vector2 d)
     {
-        static float Side(Vector2 p, Vector2 x, Vector2 y) =>
-            (y.X - x.X) * (p.Y - x.Y) - (y.Y - x.Y) * (p.X - x.X);
-
         if (MathF.Abs(Side(c, a, b)) < 1) return false;
 
         var s1 = Side(point, a, b);
@@ -330,5 +372,8 @@ public static class Gizmo
 
         return (s1 >= 0 && s2 >= 0 && s3 >= 0 && s4 >= 0) ||
                (s1 <= 0 && s2 <= 0 && s3 <= 0 && s4 <= 0);
+
+        static float Side(Vector2 p, Vector2 x, Vector2 y) =>
+            (y.X - x.X) * (p.Y - x.Y) - (y.Y - x.Y) * (p.X - x.X);
     }
 }
