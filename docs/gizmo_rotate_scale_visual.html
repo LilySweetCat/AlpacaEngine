@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gizmo: Rotate, Scale и Move — инструкция в картинках</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; background: #101522; color: #ecf1fa; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    header, main, footer { max-width: 1080px; margin: auto; padding: 24px; }
+    header { padding-top: 54px; }
+    h1 { font-size: clamp(2.2rem, 6vw, 4.6rem); line-height: 1.06; margin: 12px 0; letter-spacing: -.04em; }
+    h2 { font-size: 2rem; margin: 0 0 8px; }
+    h3 { margin: 0 0 10px; font-size: 1.25rem; }
+    p { line-height: 1.55; margin: 0; color: #c3ccda; }
+    strong { color: #fff; }
+    .eyebrow { color: #95baff; font-weight: 800; letter-spacing: .16em; text-transform: uppercase; font-size: .75rem; }
+    .intro { max-width: 690px; font-size: 1.15rem; }
+    nav { display: flex; gap: 10px; margin-top: 25px; }
+    nav a { color: #fff; background: #293750; padding: 10px 17px; border-radius: 12px; text-decoration: none; font-weight: 700; }
+    nav a:hover, nav a:focus-visible { background: #426292; }
+    section { margin: 48px 0 70px; scroll-margin-top: 24px; }
+    .section-head { margin-bottom: 24px; border-left: 5px solid #faaf62; padding-left: 18px; }
+    #scale .section-head { border-color: #8dc6ff; }
+    #move .section-head { border-color: #91dfad; }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    article { background: #1b2434; border: 1px solid #344052; border-radius: 18px; overflow: hidden; }
+    .art { background: #111a2a; border-bottom: 1px solid #344052; padding: 14px; }
+    svg { width: 100%; height: auto; display: block; }
+    svg text { fill: #eaf2ff; font: 15px system-ui, sans-serif; }
+    svg .hint { fill: #a9bcd6; font-size: 13px; }
+    .copy { padding: 22px; }
+    .step { display: inline-block; font-weight: 900; font-size: .8rem; letter-spacing: .1em; color: #101522; background: #faaf62; border-radius: 6px; padding: 4px 8px; margin-bottom: 11px; }
+    #scale .step { background: #8dc6ff; }
+    #move .step { background: #91dfad; }
+    button.step { border: 0; cursor: pointer; font-family: inherit; }
+    article[data-code] .art { cursor: pointer; }
+    button.step:hover, button.step:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+    dialog { position: fixed; inset: 0 0 0 auto; width: min(620px, 100vw); height: 100dvh; max-height: none; margin: 0; border: 0; border-left: 1px solid #526789; background: #1b2434; color: #ecf1fa; padding: 30px; overflow: auto; box-shadow: -16px 0 50px #0009; }
+    dialog::backdrop { background: #050a13b3; }
+    dialog h2 { margin: 18px 0 4px; }
+    dialog pre { margin-top: 24px; padding: 18px; overflow: auto; background: #101522; border-radius: 10px; line-height: 1.5; }
+    dialog pre code { background: none; padding: 0; white-space: pre; font-size: .85rem; }
+    .close { border: 1px solid #718eb6; border-radius: 9px; background: #293750; color: white; font: inherit; padding: 8px 14px; cursor: pointer; }
+    code { color: #b8dcff; background: #111a2a; padding: 2px 5px; border-radius: 4px; white-space: normal; }
+    .note { margin-top: 18px; border: 1px solid #46607e; border-radius: 14px; padding: 18px 20px; background: #1d2b42; }
+    .note p + p { margin-top: 9px; }
+    footer { color: #a9bcd6; border-top: 1px solid #344052; padding-bottom: 55px; }
+    @media (max-width: 720px) { .grid { grid-template-columns: 1fr; } header { padding-top: 30px; } }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">AlpacaEngine · визуальная шпаргалка</div>
+    <h1>Повернуть ↻<br>Растянуть ↗<br>Передвинуть →</h1>
+    <p class="intro">Как мышь управляет Rotate, Scale и Move в настоящем <code>Gizmo.cs</code>. Каждый кадр: луч от камеры → пересечение с воображаемой плоскостью → новое значение объекта. Схемы условные, не скриншоты viewport.</p>
+    <nav><a href="#rotate">01 · Rotate</a><a href="#scale">02 · Scale</a><a href="#move">03 · Move</a></nav>
+  </header>
+  <main>
+    <section id="rotate">
+      <div class="section-head"><div class="eyebrow">01 / Rotate</div><h2>Вращаем вокруг оси Z</h2><p>Смотрим на плоскость XY со стороны камеры. Оранжевое кольцо — ручка Z; объект находится в центре.</p></div>
+      <div class="grid">
+        <article data-code="rotate-hover">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Курсор касается оранжевого кольца вокруг объекта">
+            <circle cx="190" cy="103" r="70" fill="none" stroke="#faaf62" stroke-width="5"/><circle cx="190" cy="103" r="19" fill="#516b93"/><circle cx="190" cy="103" r="4" fill="white"/>
+            <circle cx="259" cy="96" r="7" fill="#8dc6ff"/><path d="M265 96 L308 68" stroke="#8dc6ff" stroke-width="2"/><text x="310" y="67">мышь</text>
+            <text x="13" y="188" class="hint">кольцо Z · ось вращения направлена к нам ⊙</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Rotate, находим кольцо">Шаг 1 · наводим ↗ код</button><h3>Находим кольцо</h3><p>Кольцо разбито на 64 отрезка на экране. Если курсор ближе 9 пикселей к одному из них, это ручка вращения Z. Пока это только <strong>2D-проверка попадания</strong>, не вращение.</p></div>
+        </article>
+        <article data-code="rotate-start">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Луч из камеры пересекает плоскость кольца в исходной точке">
+            <path d="M45 160 L330 160 L370 102 L85 102 Z" fill="#30415d" stroke="#718eb6" stroke-width="2"/><text x="102" y="187" class="hint">плоскость XY через центр объекта</text>
+            <path d="M160 25 L249 121" stroke="#8dc6ff" stroke-width="3"/><path d="M239 116 L249 121 L245 110" fill="none" stroke="#8dc6ff" stroke-width="3"/>
+            <circle cx="249" cy="121" r="6" fill="#faaf62"/><circle cx="204" cy="131" r="5" fill="white"/>
+            <text x="100" y="25">камера</text><text x="254" y="115">startHit</text><text x="163" y="151" class="hint">центр</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Rotate, начало жеста">Шаг 2 · кликаем ↗ код</button><h3>Фиксируем начало</h3><p>Луч через курсор пересекает плоскость кольца, перпендикулярную Z. Запоминаем точку <code>_startHit</code>, центр <code>_position</code>, ось <code>_direction</code> и исходный <code>LocalRotation</code>.</p></div>
+        </article>
+        <article data-code="rotate-angle">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Две точки на кольце образуют угол в 90 градусов относительно центра">
+            <circle cx="190" cy="109" r="70" fill="none" stroke="#53617a" stroke-width="3"/><path d="M260 109 A70 70 0 0 0 190 39" fill="none" stroke="#faaf62" stroke-width="6"/>
+            <path d="M190 109 L260 109 M190 109 L190 39" stroke="#b2d8ff" stroke-width="3"/><circle cx="190" cy="109" r="5" fill="white"/>
+            <circle cx="260" cy="109" r="6" fill="#8dc6ff"/><circle cx="190" cy="39" r="6" fill="#faaf62"/>
+            <text x="265" y="113" class="hint">старт</text><text x="197" y="33" class="hint">сейчас</text><text x="204" y="86">90°</text>
+            <text x="25" y="193" class="hint">угол считаем вокруг центра, не по числу пикселей</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Rotate, угол">Шаг 3 · тянем ↗ код</button><h3>Из двух точек получаем угол</h3><p>Каждый кадр новый луч даёт <code>hit</code> на той же плоскости. Векторы <code>startHit − center</code> и <code>hit − center</code> задают угол со знаком вокруг Z. На рисунке — 90°. При проходе через ±180° код накапливает маленькие изменения угла, чтобы можно было сделать полный оборот.</p></div>
+        </article>
+        <article data-code="rotate-apply">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Квадрат повернулся на 90 градусов вокруг оси Z">
+            <rect x="80" y="79" width="92" height="58" rx="6" fill="none" stroke="#6a7b94" stroke-dasharray="6 5" stroke-width="3"/>
+            <rect x="199" y="57" width="58" height="92" rx="6" fill="#faaf62" opacity=".85"/><circle cx="228" cy="103" r="4" fill="#111a2a"/>
+            <path d="M150 55 Q191 5 233 42" fill="none" stroke="#8dc6ff" stroke-width="3"/><path d="M223 37 L233 42 L229 31" fill="none" stroke="#8dc6ff" stroke-width="3"/>
+            <text x="84" y="161">было</text><text x="200" y="174">стало</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Rotate, применение">Шаг 4 · применяем ↗ код</button><h3>Поворачиваем объект</h3><p>Угол вокруг выбранной оси применяется к <strong>исходному</strong> повороту, результат записывается в <code>LocalRotation</code> (градусы Эйлера). На отпускании кнопки изменение попадает в историю Undo; Escape возвращает исходное состояние.</p></div>
+        </article>
+      </div>
+      <div class="note"><p><strong>Важно:</strong> если выбрана ручка X или Y, плоскость поворачивается вместе с осью: её нормаль — выбранная ось, а не всегда Z. Режим <code>Local</code> меняет ориентацию ручек; для мирового Rotate вращение вокруг мировой оси пересчитывается в локальный поворот объекта.</p></div>
+    </section>
+
+    <section id="scale">
+      <div class="section-head"><div class="eyebrow">02 / Scale</div><h2>Растягиваем вдоль оси X</h2><p>Смотрим сбоку на ось X. Синяя линия показывает выбранную ручку, квадрат на конце — место захвата.</p></div>
+      <div class="grid">
+        <article data-code="scale-hover">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Ось масштаба X с квадратной ручкой на конце">
+            <rect x="95" y="67" width="75" height="75" rx="6" fill="#536783"/><path d="M132 104 L298 104" stroke="#8dc6ff" stroke-width="5"/>
+            <rect x="288" y="94" width="20" height="20" rx="3" fill="#8dc6ff"/><circle cx="132" cy="104" r="5" fill="white"/>
+            <text x="90" y="169">объект</text><text x="266" y="142">ручка X</text><text x="183" y="88" class="hint">длина L</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Scale, находим ручку">Шаг 1 · наводим ↗ код</button><h3>Находим ручку X</h3><p>Она выглядит как отрезок с квадратом на конце. Попадание проверяется по расстоянию мыши до экранного отрезка, как у Move. В отличие от Move, оси Scale <strong>всегда локальные</strong>: они поворачиваются вместе с объектом.</p></div>
+        </article>
+        <article data-code="scale-start">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Плоскость через ось X повернута навстречу камере; луч попадает в исходную точку">
+            <path d="M43 154 L340 154 L370 94 L73 94 Z" fill="#30415d" stroke="#718eb6" stroke-width="2"/>
+            <path d="M72 127 L330 127" stroke="#8dc6ff" stroke-width="4"/><circle cx="112" cy="127" r="5" fill="white"/>
+            <path d="M174 22 L253 127" stroke="#faaf62" stroke-width="3"/><circle cx="253" cy="127" r="6" fill="#faaf62"/>
+            <text x="95" y="24">камера</text><text x="259" y="121">startHit</text><text x="55" y="188" class="hint">плоскость содержит ось X и обращена к камере</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Scale, начало жеста">Шаг 2 · кликаем ↗ код</button><h3>Запоминаем масштаб</h3><p>Для осевой ручки строится плоскость <strong>через X</strong>, удобная для взгляда камеры. Сохраняются <code>_startHit</code>, первоначальный <code>_scale</code> и длина ручки <code>_length</code> в мировых единицах.</p></div>
+        </article>
+        <article data-code="scale-factor">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Точка перетаскивания сдвинулась вправо на половину длины ручки">
+            <path d="M65 115 L315 115" stroke="#8dc6ff" stroke-width="4"/><circle cx="65" cy="115" r="5" fill="white"/>
+            <circle cx="215" cy="115" r="7" fill="#faaf62"/><circle cx="290" cy="115" r="7" fill="#8dc6ff"/>
+            <path d="M215 79 L290 79 M215 73 L215 85 M290 73 L290 85" stroke="#faaf62" stroke-width="2"/>
+            <text x="220" y="65">ΔX = L/2</text><text x="172" y="145" class="hint">старт</text><text x="270" y="145" class="hint">сейчас</text>
+            <text x="50" y="189" class="hint">важно только смещение вдоль X; вбок — игнорируем</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Scale, коэффициент">Шаг 3 · тянем ↗ код</button><h3>Считаем коэффициент</h3><p>Новый луч даёт <code>hit</code>. Смещение <code>hit − startHit</code> проецируется на X: <code>ΔX = dot(смещение, X)</code>. Коэффициент <code>factor = 1 + ΔX / L</code>. Например, сдвинули на половину длины ручки: <code>factor = 1.5</code>.</p></div>
+        </article>
+        <article data-code="scale-apply">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Ширина объекта выросла с одной до полутора исходных ширин, высота прежняя">
+            <rect x="54" y="74" width="80" height="66" rx="5" fill="#516b93"/><rect x="203" y="74" width="120" height="66" rx="5" fill="#8dc6ff"/>
+            <path d="M148 108 L183 108 M175 100 L183 108 L175 116" fill="none" stroke="#faaf62" stroke-width="3"/>
+            <text x="53" y="165">X = 2</text><text x="201" y="165">X = 3</text><text x="55" y="193" class="hint">Y и Z не меняются · 2 × 1.5 = 3</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Scale, применение">Шаг 4 · применяем ↗ код</button><h3>Меняем только Scale.X</h3><p>Код умножает <strong>исходное</strong> <code>_scale.X</code> на коэффициент: было 2 → стало 3. Компоненты Y и Z не трогает. Коэффициент не меньше 0.01, результат не меньше 0.001 — через ноль масштаб не переворачивается. Отпускание сохраняет Undo, Escape отменяет.</p></div>
+        </article>
+      </div>
+      <div class="note"><p><strong>Почему делим на L?</strong> Чтобы жест измерялся относительно длины нарисованной ручки: сдвиг на половину ручки даёт +50% масштаба. Это не изменение размера в мировых метрах, а множитель <code>LocalScale</code>.</p><p><strong>Общее с Rotate:</strong> мышь не «превращается» напрямую из 2D в 3D. Сначала берём точку пересечения луча с зафиксированной при клике плоскостью.</p></div>
+    </section>
+    <section id="move">
+      <div class="section-head"><div class="eyebrow">03 / Move</div><h2>Передвигаем по оси X</h2><p>Смотрим на объект со стороны камеры. Зелёная стрелка — X; кликаем и тянем её, не перемещая объект вбок от оси.</p></div>
+      <div class="grid">
+        <article data-code="move-hover">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Курсор рядом с экранной стрелкой X; расстояние до неё измеряется в пикселях">
+            <rect x="79" y="87" width="70" height="58" rx="5" fill="#536783"/><circle cx="114" cy="116" r="5" fill="white"/>
+            <path d="M114 116 L310 116" stroke="#91dfad" stroke-width="5"/><path d="M310 116 L289 104 L289 128 Z" fill="#91dfad"/>
+            <circle cx="225" cy="111" r="6" fill="#faaf62"/><path d="M225 111 L225 116" stroke="#faaf62" stroke-width="2"/>
+            <text x="227" y="83">мышь</text><text x="72" y="171" class="hint">проверяем расстояние до линии на экране, не 3D box</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Move, выбор стрелки">Шаг 1 · наводим ↗ код</button><h3>Выбираем стрелку X</h3><p>Ось проецируется в экранные пиксели. Если курсор ближе 9 пикселей к её отрезку, подсвечиваем ручку. Внутренние 18% стрелки не участвуют в выборе, чтобы можно было кликнуть по самому объекту.</p></div>
+        </article>
+        <article data-code="move-start">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Плоскость содержит ось X и обращена к камере; луч через курсор попадает в startHit">
+            <path d="M34 159 L325 159 L366 93 L75 93 Z" fill="#30415d" stroke="#718eb6" stroke-width="2"/>
+            <path d="M65 128 L336 128" stroke="#91dfad" stroke-width="4"/><circle cx="110" cy="128" r="5" fill="white"/>
+            <path d="M164 25 L242 128" stroke="#faaf62" stroke-width="3"/><circle cx="242" cy="128" r="6" fill="#faaf62"/>
+            <text x="97" y="24">камера</text><text x="250" y="123">startHit</text><text x="25" y="191" class="hint">плоскость проходит через объект и содержит X</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Move, начало жеста">Шаг 2 · кликаем ↗ код</button><h3>Фиксируем исходные точки</h3><p>При клике выбирается плоскость через ось X, обращённая к камере. Запоминаем пересечение луча мыши с ней <code>_startHit</code> и исходную мировую позицию объекта <code>_position</code>. Это опорные точки на весь жест.</p></div>
+        </article>
+        <article data-code="move-project">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Смещение точки мыши вправо и вверх раскладывается на горизонтальную составляющую вдоль X">
+            <path d="M45 142 L351 142" stroke="#91dfad" stroke-width="3"/><path d="M45 142 L52 137 M45 142 L52 147" stroke="#91dfad" stroke-width="2"/>
+            <circle cx="126" cy="142" r="7" fill="#faaf62"/><circle cx="274" cy="81" r="7" fill="#8dc6ff"/>
+            <path d="M126 142 L274 81" stroke="#8dc6ff" stroke-width="3"/><path d="M274 81 L274 142" stroke="#8dc6ff" stroke-width="2" stroke-dasharray="5 5"/>
+            <path d="M126 142 L274 142" stroke="#91dfad" stroke-width="6"/><text x="162" y="170">оставляем ΔX</text>
+            <text x="76" y="111" class="hint">startHit</text><text x="283" y="77" class="hint">hit</text><text x="34" y="195" class="hint">движение поперёк оси отбрасывается</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Move, проекция на ось">Шаг 3 · тянем ↗ код</button><h3>Оставляем движение по X</h3><p>Новый луч даёт <code>hit</code> на той же плоскости. Разность <code>hit − _startHit</code> — смещение в 3D. Скалярное произведение с направлением X оставляет только часть вдоль стрелки: движение мыши поперёк X игнорируется.</p></div>
+        </article>
+        <article data-code="move-apply">
+          <div class="art"><svg viewBox="0 0 400 210" role="img" aria-label="Объект переместился вправо на 0.7 по оси X, координаты Y и Z сохранились">
+            <rect x="64" y="74" width="69" height="69" rx="6" fill="none" stroke="#6a7b94" stroke-dasharray="6 5" stroke-width="3"/>
+            <rect x="237" y="74" width="69" height="69" rx="6" fill="#91dfad"/>
+            <path d="M141 108 L223 108 M215 100 L223 108 L215 116" fill="none" stroke="#faaf62" stroke-width="3"/>
+            <text x="55" y="174">(2, 1, 0)</text><text x="218" y="174">(2.7, 1, 0)</text><text x="48" y="198" class="hint">исходная позиция + (0.7, 0, 0)</text>
+          </svg></div>
+          <div class="copy"><button class="step" type="button" aria-label="Показать код: Move, применение позиции">Шаг 4 · применяем ↗ код</button><h3>Меняем позицию объекта</h3><p>Смещение добавляется к <strong>исходной мировой</strong> позиции. Например, <code>(2, 1, 0) + (0.7, 0, 0) = (2.7, 1, 0)</code>. Если есть родитель, переводим результат из мировых координат в локальные и записываем в <code>LocalPosition</code>. Отпускание сохраняет Undo; Escape отменяет.</p></div>
+        </article>
+      </div>
+      <div class="note"><p><strong>А маленькие квадраты между стрелками?</strong> Это ручки перемещения в плоскости: например, квадрат между Y и Z двигает по Y и Z одновременно, оставляя X неизменным. Для них код берёт <em>всё</em> смещение <code>hit − _startHit</code>, без проекции на одну ось. <code>Local</code> меняет направление стрелок Move; в мировом режиме они совпадают с мировыми X/Y/Z.</p></div>
+    </section>
+  </main>
+  <dialog id="source" aria-labelledby="source-title">
+    <button class="close" type="button" onclick="this.closest('dialog').close()">← К схемам</button>
+    <h2 id="source-title"></h2>
+    <p id="source-location"></p>
+    <pre><code id="source-code"></code></pre>
+    <p>Фрагмент из <code>src/Editor/Gizmo.cs</code>. Местами показаны только важные для шага строки.</p>
+  </dialog>
+  <footer>Сопоставление с кодом: <code>src/Editor/Gizmo.cs</code> — попадание в ручку: 197–246; начало жеста: 283–313; обновление Move/Scale/Rotate: 121–157; завершение и отмена: 75–96.</footer>
+  <script>
+    const snippets = {
+      'rotate-hover': [224, `if (Mode == Operation.Rotate)
+{
+    var ring = Ring(i);
+    for (var j = 0; j < 64; j++)
+    {
+        var distance = SegmentDistance(mouse, ring[j], ring[j + 1]);
+        if (distance < nearestDistance) { nearestDistance = distance; hoveredHandle = i; }
+    }
+}`],
+      'rotate-start': [284, `if (!consumed && hoveredHandle >= 0 && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+{
+    var direction = Axis(hoveredHandle % 3);
+    var normal = Mode == Operation.Rotate || hoveredHandle >= 3 ? direction :
+        forward - direction * Vector3.Dot(forward, direction);
+    if (normal.LengthSquared() > 0.0001f &&
+        IntersectPlane(ray, world, Vector3.Normalize(normal), out var hit) &&
+        (Mode != Operation.Rotate || (hit - world).LengthSquared() > 0.000001f))
+    {
+        _target = selected;
+        _direction = direction;
+        _planeNormal = Vector3.Normalize(normal);
+        _startHit = hit;
+        _position = world;
+        _rotation = selected.LocalRotation;
+    }
+}`],
+      'rotate-angle': [148, `else if ((hit - _position).LengthSquared() > 0.000001f)
+{
+    var angle = SignedAngle(_startHit - _position, hit - _position, _direction);
+    _angle += MathF.IEEERemainder(angle - _lastAngle, 2 * MathF.PI);
+    _lastAngle = angle;
+    selected.LocalRotation = EulerDegrees(Quaternion.CreateFromAxisAngle(_direction, _angle)
+        * GameObject.Orientation(_rotation));
+}`],
+      'rotate-apply': [150, `var angle = SignedAngle(_startHit - _position, hit - _position, _direction);
+_angle += MathF.IEEERemainder(angle - _lastAngle, 2 * MathF.PI);
+_lastAngle = angle;
+selected.LocalRotation = EulerDegrees(Quaternion.CreateFromAxisAngle(_direction, _angle)
+    * GameObject.Orientation(_rotation));`],
+      'scale-hover': [175, `var local = Local || Mode == Operation.Scale;
+Vector3 Axis(int i) => local ? Vector3.Transform(UnitAxis(i), rotation) : UnitAxis(i);
+
+// Строки 236–244: попадание мыши на экранную ось
+var end = Project(world + axis * length);
+if (Vector2.Distance(origin, end) < 12) continue;
+var distance = SegmentDistance(mouse, Vector2.Lerp(origin, end, 0.18f), end);
+if (distance < nearestDistance) { nearestDistance = distance; hoveredHandle = i; }`],
+      'scale-start': [286, `var direction = Axis(hoveredHandle % 3);
+var normal = Mode == Operation.Rotate || hoveredHandle >= 3 ? direction :
+    forward - direction * Vector3.Dot(forward, direction);
+if (normal.LengthSquared() > 0.0001f &&
+    IntersectPlane(ray, world, Vector3.Normalize(normal), out var hit))
+{
+    _direction = direction;
+    _planeNormal = Vector3.Normalize(normal);
+    _startHit = hit;
+    _scale = selected.LocalScale;
+    _length = length;
+}`],
+      'scale-factor': [126, `else if (IntersectPlane(ray, _position, _planeNormal, out var hit))
+{
+    // Строка 141: масштаб относительно длины ручки
+    var factor = MathF.Max(0.01f, 1 + Vector3.Dot(hit - _startHit, _direction) / _length);
+}`],
+      'scale-apply': [139, `else if (Mode == Operation.Scale)
+{
+    var factor = MathF.Max(0.01f, 1 + Vector3.Dot(hit - _startHit, _direction) / _length);
+    var scale = _scale;
+    scale[_axis] = MathF.Max(0.001f, _scale[_axis] * factor);
+    selected.LocalScale = scale;
+}`],
+      'move-hover': [234, `else
+{
+    var end = Project(world + axis * length);
+    if (Vector2.Distance(origin, end) < 12) continue;
+    var distance = SegmentDistance(mouse, Vector2.Lerp(origin, end, 0.18f), end);
+    if (distance < nearestDistance) { nearestDistance = distance; hoveredHandle = i; }
+}`],
+      'move-start': [284, `if (!consumed && hoveredHandle >= 0 && ImGui.IsMouseClicked(ImGuiMouseButton.Left))
+{
+    var direction = Axis(hoveredHandle % 3);
+    var normal = Mode == Operation.Rotate || hoveredHandle >= 3 ? direction :
+        forward - direction * Vector3.Dot(forward, direction);
+    if (normal.LengthSquared() > 0.0001f &&
+        IntersectPlane(ray, world, Vector3.Normalize(normal), out var hit) &&
+        (Mode != Operation.Rotate || (hit - world).LengthSquared() > 0.000001f))
+    {
+        _target = selected;
+        _direction = direction;
+        _planeNormal = Vector3.Normalize(normal);
+        _startHit = hit;
+        _position = world;
+    }
+}`],
+      'move-project': [126, `else if (IntersectPlane(ray, _position, _planeNormal, out var hit))
+{
+    if (Mode == Operation.Move)
+    {
+        var worldPosition = _position + (_axis >= 3 ? hit - _startHit :
+            _direction * Vector3.Dot(hit - _startHit, _direction));
+    }
+}`],
+      'move-apply': [129, `if (Mode == Operation.Move)
+{
+    var worldPosition = _position + (_axis >= 3 ? hit - _startHit :
+        _direction * Vector3.Dot(hit - _startHit, _direction));
+    selected.LocalPosition = selected.Parent == null
+        ? worldPosition : Vector3.Transform(worldPosition, _parentWorldInv);
+}`]
+    };
+    const panel = document.querySelector('#source');
+    document.querySelector('main').addEventListener('click', event => {
+      if (!event.target.closest('button.step, .art')) return;
+      const card = event.target.closest('article[data-code]');
+      if (!card) return;
+      const [line, code] = snippets[card.dataset.code];
+      document.querySelector('#source-title').textContent = card.querySelector('h3').textContent;
+      document.querySelector('#source-location').textContent = `Gizmo.cs · начиная со строки ${line}`;
+      document.querySelector('#source-code').textContent = code;
+      panel.showModal();
+    });
+    panel.addEventListener('click', event => { if (event.target === panel) panel.close(); });
+  </script>
+</body>
+</html>
