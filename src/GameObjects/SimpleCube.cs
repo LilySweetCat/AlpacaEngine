@@ -5,7 +5,7 @@ namespace AlpacaEngine.GameObjects;
 
 public class SimpleCube : GameObject
 {
-    public Color CubeColor = Color.Gray ;
+    public Color CubeColor = Color.Gray;
 
     public SimpleCube()
     {
@@ -18,8 +18,10 @@ public class SimpleCube : GameObject
         Raylib.DrawCube(Vector3.Zero, 1, 1, 1, CubeColor);
     }
 
+    // Same shape as Render: components first, then the cube outline.
     public override void RenderOnSelected()
     {
+        base.RenderOnSelected();
         Raylib.DrawCubeWires(Vector3.Zero, 1, 1, 1, Color.Yellow);
     }
 }

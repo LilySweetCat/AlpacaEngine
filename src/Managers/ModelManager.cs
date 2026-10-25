@@ -22,7 +22,9 @@ public static class ModelManager
     public static bool TryGet(string path, out Model model)
     {
         if (Models.TryGetValue(path, out model)) return true;
+
         if (Errors.ContainsKey(path) || !Raylib.IsWindowReady()) return false;
+
         if (!File.Exists(path))
         {
             Errors[path] = "Model file not found: " + path;
@@ -30,6 +32,7 @@ public static class ModelManager
         }
 
         model = Raylib.LoadModel(path);
+
         if (!Raylib.IsModelValid(model))
         {
             Raylib.UnloadModel(model);
@@ -37,6 +40,7 @@ public static class ModelManager
             Errors[path] = "Could not load model: " + path;
             return false;
         }
+
         Models.Add(path, model);
         return true;
     }

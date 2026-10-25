@@ -1,12 +1,13 @@
 using System.Numerics;
 
-namespace AlpacaEngine.Extentions;
+namespace AlpacaEngine.Extensions;
 
-public static class QuaternionExtention
+public static class QuaternionExtension
 {
     extension(Quaternion quaternion)
     {
-        // Convet Quaternion to Euler
+        // Convert the quaternion to Euler angles in degrees: X pitch, Y yaw, Z roll,
+        // the same order GameObject.Orientation uses to build a quaternion.
         public Vector3 ToEulerAngles()
         {
             var m = Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(quaternion));

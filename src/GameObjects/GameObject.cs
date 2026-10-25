@@ -34,7 +34,8 @@ public class GameObject
 
     public Quaternion WorldRotation => (Parent?.WorldRotation ?? Quaternion.Identity) * Orientation(LocalRotation);
 
-    // ponytail: componentwise; wrong for rotated non-uniform parent scale, fix with full matrix extraction if needed
+    // Known limitation: component-wise scale is wrong when a parent rotates and scales
+    // non-uniformly. Extract the scale from the full world matrix if that ever matters.
     public Vector3 WorldScale => Parent == null ? LocalScale : LocalScale * Parent.WorldScale;
 
     public Matrix4x4 WorldMatrix

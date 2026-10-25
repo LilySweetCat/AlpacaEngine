@@ -9,7 +9,10 @@ namespace AlpacaEngine.Editor;
 
 public static class EditorState
 {
-    public static Project? CurrentProject;
+    // Windows paths are case-insensitive; macOS and Linux stay case-sensitive.
+    // A missed match only costs a cache entry, a wrong match could hit the wrong file.
+    internal static StringComparer PathComparer => OperatingSystem.IsWindows()
+        ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     public static Scene CurrentScene
     {
@@ -41,7 +44,9 @@ public static class EditorState
     public static string CreateScene(string folder, string name)
     {
         name = name.Trim();
+
         if (name.EndsWith(".scene", StringComparison.OrdinalIgnoreCase)) name = name[..^6].Trim();
+
         if (string.IsNullOrWhiteSpace(name) || name is "." or ".."
             || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
             || name.Contains('/') || name.Contains('\\'))
@@ -49,6 +54,7 @@ public static class EditorState
 
         var path = Path.GetFullPath(Path.Combine(folder, name + ".scene"));
         var scene = new Scene { Name = name, GameObjects = [] };
+
         // Never overwrite an existing asset, even if it appeared after the dialog opened.
         using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
         JsonSerializer.Serialize(stream, scene, SceneJsonOptions);
@@ -61,8 +67,10 @@ public static class EditorState
         using var stream = File.OpenRead(path);
         var scene = JsonSerializer.Deserialize<Scene>(stream, SceneJsonOptions)
                     ?? throw new JsonException("The scene file is empty.");
+
         if (scene.GameObjects == null || !ValidObjects(scene.GameObjects))
             throw new JsonException("The scene contains an invalid object list.");
+
         // Only replace the active scene after the entire file has been loaded successfully.
         CurrentScene = scene;
         CurrentScenePath = path;
@@ -86,19 +94,15 @@ public static class EditorState
     public static void DeleteAsset(string path)
     {
         path = Path.GetFullPath(path);
-        var comparer = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
-            ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
-        var projectPath = CurrentProject == null || string.IsNullOrWhiteSpace(WorkingDirectory)
-            ? null : Path.GetFullPath(Path.Combine(WorkingDirectory, CurrentProject.Name + ".proj"));
-        var deletingScene = comparer.Equals(path, CurrentScenePath);
-        var deletingProject = comparer.Equals(path, projectPath);
 
-        // Reset editing state only after deletion succeeds.
+        var deletingScene = PathComparer.Equals(path, CurrentScenePath);
+
+        // Reset editing state only after the deletion succeeds.
         File.Delete(path);
-        if (deletingProject) CurrentProject = null;
-        if (deletingScene || deletingProject) CurrentScene = new Scene();
+
+        if (deletingScene) CurrentScene = new Scene();
     }
-    
+
     public static GameObject? Selected;
 
     public static void ValidateSelection()
@@ -117,22 +121,27 @@ public static class EditorState
             if (ReferenceEquals(gameObject, target)
                 || (gameObject.Child != null && Contains(gameObject.Child, target))) return true;
         }
+
         return false;
     }
 
     public static void RenameGameObject(GameObject target, string name)
     {
         name = name.Trim();
+
         if (name.Length == 0 || !Contains(CurrentScene.GameObjects, target)) return;
 
         Inspector.FinishEdit();
+
         if (target.Name == name) return;
+
         CommandManager.Do(new ChangeValueCommand<string>(value => target.Name = value, target.Name, name));
     }
 
     public static void AddGameObject()
     {
         Inspector.FinishEdit();
+
         var scene = CurrentScene;
         var gameObject = new GameObject();
         CommandManager.Do(new ChangeValueCommand<List<GameObject>>(
@@ -144,6 +153,7 @@ public static class EditorState
     public static void AddComponent(GameObject target, IComponent component)
     {
         if (!Contains(CurrentScene.GameObjects, target)) return;
+
         Inspector.FinishEdit();
         CommandManager.Do(new ChangeValueCommand<List<IComponent>>(
             components => target.Components = components, target.Components,
@@ -161,6 +171,7 @@ public static class EditorState
             {
                 Gizmo.Cancel(true);
                 Inspector.FinishEdit();
+
                 var remaining = new List<GameObject>(objects);
                 remaining.Remove(target);
                 CommandManager.Do(new ChangeValueCommand<List<GameObject>>(value =>
@@ -175,6 +186,7 @@ public static class EditorState
 
             foreach (var gameObject in objects)
                 if (gameObject.Child != null && RemoveFrom(gameObject.Child, gameObject)) return true;
+
             return false;
         }
     }
@@ -184,7 +196,7 @@ public static class EditorState
 
     public static RenderTexture2D ViewTexture;
     public static Vector2 PendingSize = new(800, 600);
-    
+
     public static Camera3D CurrentCamera;
     public static bool ViewportHovered;
 }

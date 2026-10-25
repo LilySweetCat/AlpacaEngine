@@ -23,6 +23,11 @@
       <None Update="assets/icons/*.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>
 
+    <!-- Lets the nested test project call internal editor types directly instead of using reflection. -->
+    <ItemGroup>
+      <InternalsVisibleTo Include="AlpacaEngine.Tests" />
+    </ItemGroup>
+
     <!-- The test project is nested in this folder; keep it out of this project's default item globs. -->
     <ItemGroup>
       <Compile Remove="AlpacaEngine.Tests/**" />

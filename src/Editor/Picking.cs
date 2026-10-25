@@ -1,30 +1,23 @@
 using System.Numerics;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
-using ImGuiNET;
 using Raylib_cs;
 
 namespace AlpacaEngine.Editor;
 
+// Mouse-to-object selection in the 3D viewport.
 public static class Picking
 {
-    public static Vector2? GetMouseInViewport()
+    // The camera ray through the mouse position. The mouse point is first converted
+    // from UI coordinates into render-texture pixels, because the texture can be
+    // smaller or larger than the viewport image on screen.
+    public static Ray GetMouseRay(Vector2 mouse, Vector2 min, Vector2 max, Camera3D camera)
     {
-        var imageMax = ImGui.GetItemRectMax();
-        var imageMin = ImGui.GetItemRectMin();
-        
-        var mousePos = ImGui.GetMousePos();
-        var localPos = mousePos - imageMin;
-        var size = imageMax - imageMin;
-        
-        if (localPos.X < 0 || localPos.Y < 0 || localPos.X > size.X || localPos.Y > size.Y) return null;
-        
-        var rtSize   = new Vector2(EditorState.ViewTexture.Texture.Width, EditorState.ViewTexture.Texture.Height);
-        var uv       = localPos / size;
-        var rtPixel  = uv * rtSize;
-        return rtPixel;
+        var texture = EditorState.ViewTexture.Texture;
+        var pixel = (mouse - min) / (max - min) * new Vector2(texture.Width, texture.Height);
+
+        return Raylib.GetScreenToWorldRayEx(pixel, camera, texture.Width, texture.Height);
     }
-    
 
     public static GameObject? PickAtMouse(Ray ray)
     {
@@ -41,11 +34,14 @@ public static class Picking
         {
             var world = gameObject.WorldMatrix;
             var nearestDistance = float.MaxValue;
+
             if (Matrix4x4.Invert(world, out var inverse))
             {
                 var direction = Vector3.TransformNormal(ray.Direction, inverse);
                 var localRay = new Ray(Vector3.Transform(ray.Position, inverse), Vector3.Normalize(direction));
+
                 if (gameObject is SimpleCube) TestBounds(new BoundingBox(new Vector3(-0.5f), new Vector3(0.5f)));
+
                 foreach (var component in gameObject.Components)
                     if (component is ModelRenderComponent renderer && renderer.TryGetModel(out var model))
                         TestBounds(Raylib.GetModelBoundingBox(model));
@@ -53,9 +49,12 @@ public static class Picking
                 void TestBounds(BoundingBox bounds)
                 {
                     var collision = Raylib.GetRayCollisionBox(localRay, bounds);
+
                     if (!collision.Hit || collision.Distance < 0f) return;
+
                     var point = Vector3.Transform(localRay.Position + localRay.Direction * collision.Distance, world);
                     var distance = Vector3.Distance(ray.Position, point);
+
                     if (distance < nearestDistance) nearestDistance = distance;
                 }
             }

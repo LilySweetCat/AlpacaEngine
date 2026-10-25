@@ -1,7 +1,6 @@
 using System.Numerics;
 using AlpacaEngine.Editor;
 using AlpacaEngine.GameObjects;
-using ImGuiNET;
 using Raylib_cs;
 using rlImGui_cs;
 
@@ -12,51 +11,39 @@ class Program
     [System.STAThread]
     static int Main(string[] args)
     {
-        // --proj <dir>  project working directory
-        // --game        launch as game instead of the editor
+        // --proj <dir>: the working directory for assets and scenes.
         for (var i = 0; i < args.Length; i++)
         {
-            switch (args[i])
-            {
-                case "--proj" when i + 1 < args.Length:
-                    EditorState.WorkingDirectory = args[++i];
-                    break;
-                case "--game":
-                    StartGame();
-                    return 0;
-            }
+            if (args[i] != "--proj" || i + 1 >= args.Length) continue;
+
+            EditorState.WorkingDirectory = args[++i];
         }
 
         StartEditor();
         return 0;
     }
 
-    private static void StartGame()
-    {
-        
-    }
-
     private static void StartEditor()
     {
         Raylib.SetConfigFlags(ConfigFlags.ResizableWindow | ConfigFlags.HighDpiWindow);
         Raylib.InitWindow(1280, 720, $"AlpacaEngine: {EditorState.CurrentScene.Name}");
-        
+
         // icon for app
         var icon = Raylib.LoadImage(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "alpaca.png"));
         Raylib.SetWindowIcon(icon);
         Raylib.UnloadImage(icon);
-        
-        // all icons go here 
+
+        // all icons go here
         InitializeIcons();
 
         Raylib.MaximizeWindow();
         Raylib.SetTargetFPS(60);
-        
+
         var windowScale = Raylib.GetWindowScaleDPI();
-        var dpiScale = windowScale.X; 
-        
+        var dpiScale = windowScale.X;
+
         rlImGui.Setup(true, enableDocking: true);
-        
+
         EditorTheme.Apply(dpiScale);
 
         EditorState.CurrentCamera = new()
@@ -67,7 +54,7 @@ class Program
             FovY = 60f,
             Projection = CameraProjection.Perspective,
         };
-        
+
         // ---- render texture for 3D Viewport (resolution is default here) ----
         EditorState.ViewTexture = Raylib.LoadRenderTexture(800, 600);
 
@@ -80,14 +67,14 @@ class Program
             {
                 Raylib.UpdateCamera(ref EditorState.CurrentCamera, CameraMode.Free);
             }
-            
+
             // ============================================================
             // STAGE 0.5: Recreate viewport RenderTexture if panel size changed
             // ============================================================
             var resScale = EditorState.ResScaleIndex switch
             {
                 0 => 0.5f,
-                1 => 0.76f,
+                1 => 0.75f,
                 2 => 1f,
                 _ => Raylib.GetWindowScaleDPI().X, // HiDPI native
             };
@@ -109,12 +96,12 @@ class Program
             Raylib.ClearBackground(Color.Black);
 
             Raylib.BeginMode3D(EditorState.CurrentCamera);
-                
+
             // Draw grid under the cube
             Raylib.DrawGrid(10, 1.0f);
 
             // render 3D
-            HandleGameObjectRenderingRecursively(EditorState.CurrentScene.GameObjects);
+            RenderGameObjects(EditorState.CurrentScene.GameObjects);
 
             Raylib.EndMode3D();
             Raylib.EndTextureMode();
@@ -129,7 +116,6 @@ class Program
             rlImGui.Begin();
 
             Inspector.Render();
-            
 
             // ============================================================
             // STAGE 3: Cleanup: End ImGui Processing Frame and draw metadata
@@ -152,15 +138,16 @@ class Program
     {
         AssetBrowser.LoadIcons();
         Inspector.GameObjectIcon = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "gameobject.png"));
-        
+
         Raylib.SetTextureFilter(Inspector.GameObjectIcon, TextureFilter.Bilinear);
     }
 
-    private static void HandleGameObjectRenderingRecursively(List<GameObject> gameObjects)
+    private static void RenderGameObjects(List<GameObject> gameObjects)
     {
         foreach (var gameObject in gameObjects)
         {
             gameObject.PushTransform();
+
             try
             {
                 gameObject.Render();
@@ -176,7 +163,7 @@ class Program
             }
 
             // Each WorldMatrix already includes its parents; do not nest transforms.
-            if (gameObject.Child != null) HandleGameObjectRenderingRecursively(gameObject.Child);
+            if (gameObject.Child != null) RenderGameObjects(gameObject.Child);
         }
     }
 }

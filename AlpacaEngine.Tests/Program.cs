@@ -3,7 +3,7 @@ using AlpacaEngine;
 using AlpacaEngine.Editor;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
-using AlpacaEngine.Extentions;
+using AlpacaEngine.Extensions;
 using AlpacaEngine.Managers;
 using Raylib_cs;
 using ImGuiNET;
@@ -158,26 +158,21 @@ try
     File.WriteAllText(Path.Combine(nestedAssets, "Alpaca.txt"), "unsupported");
     Directory.CreateSymbolicLink(Path.Combine(nestedAssets, "Cycle"), assetFolder);
     File.CreateSymbolicLink(Path.Combine(nestedAssets, "Linked.glb"), modelAsset);
-    var browserType = typeof(Inspector).Assembly.GetType("AlpacaEngine.Editor.AssetBrowser")!;
-    const System.Reflection.BindingFlags instanceFlags = System.Reflection.BindingFlags.NonPublic
-        | System.Reflection.BindingFlags.Instance;
-    object Browser(IReadOnlySet<string> extensions, string query)
-    {
-        var browser = Activator.CreateInstance(browserType, instanceFlags, null, new object[] { extensions }, null)!;
-        browserType.GetField("_root", instanceFlags)!.SetValue(browser, assetFolder);
-        browserType.GetField("_search", instanceFlags)!.SetValue(browser, query);
-        return browser;
-    }
-    string[] Search(object browser) => (string[])browserType.GetMethod("SearchFiles", instanceFlags)!.Invoke(browser, null)!;
-    var picker = Browser(ModelManager.SupportedExtensions, "ALPACA");
-    Check(Search(picker).SequenceEqual(new[] { modelAsset }),
+
+    Check(AssetBrowser.Search(assetFolder, "ALPACA", ModelManager.SupportedExtensions, out _)
+        .SequenceEqual(new[] { modelAsset }),
         "Picker search finds nested models case-insensitively and skips other formats and links");
-    var browser = Browser(null, "alpaca");
-    Check(Search(browser).Length == 2, "Main browser searches all supported asset types");
-    browserType.GetField("_search", instanceFlags)!.SetValue(picker, "models");
-    Check(Search(picker).SequenceEqual(new[] { modelAsset }), "Search matches project-relative directory names");
-    browserType.GetField("_search", instanceFlags)!.SetValue(picker, "missing");
-    Check(Search(picker).Length == 0, "Search updates cached results when query changes");
+
+    Check(AssetBrowser.Search(assetFolder, "alpaca", null, out _).Length == 2,
+        "Main browser searches all supported asset types");
+
+    Check(AssetBrowser.Search(assetFolder, "models", ModelManager.SupportedExtensions, out _)
+        .SequenceEqual(new[] { modelAsset }),
+        "Search matches project-relative directory names");
+
+    Check(AssetBrowser.Search(assetFolder, "missing", ModelManager.SupportedExtensions, out _).Length == 0,
+        "A fresh query returns fresh results");
+
     Check(ModelManager.SupportedExtensions.Contains(".OBJ") && !ModelManager.SupportedExtensions.Contains(".png"),
         "Model extension filter is case-insensitive and excludes images");
 }
@@ -340,8 +335,6 @@ try
         io.DeltaTime = 1f / 60;
         unsafe { io.NativePtr->IniFilename = null; }
         io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height);
-        var drawInspector = typeof(Inspector).GetMethod("DrawInspector",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         var inspectorTarget = new SimpleCube();
         var originalInspectorName = inspectorTarget.Name;
         EditorState.Selected = inspectorTarget;
@@ -349,11 +342,13 @@ try
         {
             io.AddMousePosEvent(mouse.X, mouse.Y);
             io.AddMouseButtonEvent(0, down);
+
             if (text != null) io.AddInputCharactersUTF8(text);
+
             ImGui.NewFrame();
             ImGui.SetNextWindowPos(Vector2.Zero);
             ImGui.SetNextWindowSize(io.DisplaySize);
-            drawInspector.Invoke(null, null);
+            Inspector.DrawInspector();
             ImGui.Render();
         }
         InspectorFrame(Vector2.Zero, false);

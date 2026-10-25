@@ -43,6 +43,7 @@ public static class CommandManager
     public static void Undo()
     {
         if (!Commands.TryPeek(out var latestCommand)) return;
+
         latestCommand.Undo();
         Commands.Pop();
         RedoCommands.Push(latestCommand);
@@ -51,6 +52,7 @@ public static class CommandManager
     public static void Redo()
     {
         if (!RedoCommands.TryPeek(out var command)) return;
+
         command.Do();
         RedoCommands.Pop();
         Commands.Push(command);
