@@ -10,10 +10,10 @@ internal static class EditorTheme
         ImGui.StyleColorsDark();
         var style = ImGui.GetStyle();
 
-        style.WindowPadding = new Vector2(10, 10);
-        style.FramePadding = new Vector2(8, 5);
-        style.ItemSpacing = new Vector2(8, 6);
-        style.ItemInnerSpacing = new Vector2(6, 4);
+        style.WindowPadding = new Vector2(4, 4);
+        style.FramePadding = new Vector2(4, 2);
+        style.ItemSpacing = new Vector2(4, 3);
+        style.ItemInnerSpacing = new Vector2(3, 2);
         style.WindowRounding = 8;
         style.ChildRounding = 6;
         style.FrameRounding = 5;

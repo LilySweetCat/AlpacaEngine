@@ -140,6 +140,7 @@ class Program
         }
 
         // Cleanup resources
+        Managers.ModelManager.UnloadAll();
         Raylib.UnloadTexture(Inspector.GameObjectIcon);
         AssetBrowser.UnloadIcons();
         Raylib.UnloadRenderTexture(EditorState.ViewTexture);
@@ -160,16 +161,22 @@ class Program
         foreach (var gameObject in gameObjects)
         {
             gameObject.PushTransform();
-            gameObject.Render();
-
-            if (EditorState.Selected == gameObject)
+            try
             {
-                gameObject.RenderWireframe();
+                gameObject.Render();
+
+                if (EditorState.Selected == gameObject)
+                {
+                    gameObject.RenderOnSelected();
+                }
+            }
+            finally
+            {
+                gameObject.PopTransform();
             }
 
+            // Each WorldMatrix already includes its parents; do not nest transforms.
             if (gameObject.Child != null) HandleGameObjectRenderingRecursively(gameObject.Child);
-
-            gameObject.PopTransform();
         }
     }
 }

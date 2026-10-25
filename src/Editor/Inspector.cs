@@ -1,6 +1,7 @@
 using System.Numerics;
 using System.Text.Json;
 using AlpacaEngine.GameObjects;
+using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;
 using ImGuiNET;
 using Raylib_cs;
@@ -45,6 +46,7 @@ public static class Inspector
 
         // Active widgets keep their own Undo (notably InputText); do not interrupt a drag.
         if (!ImGui.IsAnyItemActive() && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
+            && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel)
             && ImGui.GetIO().KeyCtrl)
         {
             if (ImGui.IsKeyPressed(ImGuiKey.Z, false)) CommandManager.Undo();
@@ -63,8 +65,7 @@ public static class Inspector
                 if (ImGui.MenuItem("Open Project", "Ctrl+O")) {
                 }
                 if (ImGui.MenuItem("Save Project", "Ctrl+S")) {
-                    var data = JsonSerializer.Serialize(EditorState.CurrentScene);
-                    File.WriteAllText($"{Directory.GetCurrentDirectory()}/{EditorState.CurrentScene.Name}.scene", data);
+                    EditorState.SaveScene();
                 }
                 ImGui.EndMenu();
             }
@@ -178,6 +179,22 @@ public static class Inspector
             var scale = target.LocalScale;
             ImGui.DragFloat3("Local Scale", ref target.LocalScale);
             TrackEdit(target, nameof(target.LocalScale), scale, () => target.LocalScale, value => target.LocalScale = value);
+
+            for (var i = 0; i < target.Components.Count; i++)
+            {
+                ImGui.PushID(i);
+                if (ImGui.CollapsingHeader(target.Components[i].GetType().Name, ImGuiTreeNodeFlags.DefaultOpen))
+                    target.Components[i].DrawOnInspector();
+                ImGui.PopID();
+            }
+
+            if (ImGui.Button("Add Component")) ImGui.OpenPopup("AddComponentPopup");
+            if (ImGui.BeginPopup("AddComponentPopup"))
+            {
+                if (ImGui.MenuItem("ModelRenderComponent"))
+                    EditorState.AddComponent(target, new ModelRenderComponent());
+                ImGui.EndPopup();
+            }
             
             ImGui.PopID();
         }
@@ -215,14 +232,7 @@ public static class Inspector
         
         if (ImGui.BeginPopupContextWindow("ctx_empty", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
         {
-            if (ImGui.MenuItem("Add SimpleCube"))
-            {
-                var oldGameObjectsList = EditorState.CurrentScene.GameObjects;
-                var newGameObjectsList = new List<GameObject>(oldGameObjectsList) { new SimpleCube() };
-
-                CommandManager.RecordChange(newGameObjects => EditorState.CurrentScene.GameObjects = newGameObjects, oldGameObjectsList, newGameObjectsList);
-                EditorState.CurrentScene.GameObjects = newGameObjectsList;
-            }
+            if (ImGui.MenuItem("Add GameObject")) EditorState.AddGameObject();
             ImGui.EndPopup();
         }
 

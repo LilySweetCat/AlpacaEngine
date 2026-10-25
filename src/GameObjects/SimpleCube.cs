@@ -7,13 +7,19 @@ public class SimpleCube : GameObject
 {
     public Color CubeColor = Color.Gray ;
 
-    public override void Render()
+    public SimpleCube()
     {
-        Raylib.DrawCube(Vector3.Zero, LocalScale.X, LocalScale.Y, LocalScale.Z, CubeColor);
+        Name = "SimpleCube";
     }
 
-    public override void RenderWireframe()
+    public override void Render()
     {
-        Raylib.DrawCubeWires(Vector3.Zero, LocalScale.X, LocalScale.Y, LocalScale.Z, Color.Yellow);
+        base.Render();
+        Raylib.DrawCube(Vector3.Zero, 1, 1, 1, CubeColor);
+    }
+
+    public override void RenderOnSelected()
+    {
+        Raylib.DrawCubeWires(Vector3.Zero, 1, 1, 1, Color.Yellow);
     }
 }

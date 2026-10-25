@@ -1,4 +1,5 @@
 using System.Numerics;
+using AlpacaEngine.Extentions;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
 using ImGuiNET;
@@ -24,24 +25,6 @@ public static class Gizmo
     private static Matrix4x4 _parentWorldInv;
     private static float _length, _lastAngle, _angle;
     private static readonly uint[] Colors = [0xff5b48e5, 0xff38cd83, 0xfff28a45];
-
-    // Rotate хранит угол как кватернион, а объект — как градусы Эйлера.
-    // При pitch ≈ ±90° yaw и roll совпадают: фиксируем roll = 0.
-    // TODO: to extention method for Quaternion
-    public static Vector3 EulerDegrees(Quaternion quaternion)
-    {
-        var m = Matrix4x4.CreateFromQuaternion(Quaternion.Normalize(quaternion));
-
-        var pitch = MathF.Asin(Math.Clamp(-m.M32, -1, 1));
-        var yaw = MathF.Atan2(m.M31, m.M33);
-        var roll = MathF.Atan2(m.M12, m.M22);
-
-        if (!(MathF.Abs(MathF.Cos(pitch)) < 0.0001f)) return new Vector3(pitch, yaw, roll) * (180 / MathF.PI);
-
-        yaw = MathF.Atan2(-m.M13, m.M11);
-        roll = 0;
-        return new Vector3(pitch, yaw, roll) * (180 / MathF.PI);
-    }
 
     // Луч от камеры + плоскость жеста → точка мыши в 3D; параллельный луч или точка позади камеры не подходят.
     public static bool IntersectPlane(Ray ray, Vector3 point, Vector3 normal, out Vector3 hit)
@@ -325,8 +308,8 @@ public static class Gizmo
         // Накопление небольших приращений позволяет пройти границу ±180° и сделать полный оборот.
         _angle += MathF.IEEERemainder(angle - _lastAngle, 2 * MathF.PI);
         _lastAngle = angle;
-        selected.LocalRotation = EulerDegrees(Quaternion.CreateFromAxisAngle(_direction, _angle)
-                                              * GameObject.Orientation(_rotation));
+        selected.LocalRotation = (Quaternion.CreateFromAxisAngle(_direction, _angle)
+                                                           * GameObject.Orientation(_rotation)).ToEulerAngles();
     }
 
     private static void HandleScale(GameObject selected, Vector3 hit)

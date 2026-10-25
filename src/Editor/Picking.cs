@@ -1,5 +1,6 @@
 using System.Numerics;
 using AlpacaEngine.GameObjects;
+using AlpacaEngine.GameObjects.Components;
 using ImGuiNET;
 using Raylib_cs;
 
@@ -38,15 +39,30 @@ public static class Picking
     {
         foreach (var gameObject in gameObjects)
         {
-            var inverse = Quaternion.Inverse(gameObject.WorldRotation);
-            var localRay = new Ray(Vector3.Transform(ray.Position - gameObject.WorldPosition, inverse),
-                Vector3.Transform(ray.Direction, inverse));
-            var half = Vector3.Abs(gameObject.WorldScale) / 2;
-            var collision = Raylib.GetRayCollisionBox(localRay, new BoundingBox(-half, half));
-
-            if (collision.Hit && collision.Distance >= 0f && collision.Distance < bestDist)
+            var world = gameObject.WorldMatrix;
+            var nearestDistance = float.MaxValue;
+            if (Matrix4x4.Invert(world, out var inverse))
             {
-                bestDist = collision.Distance;
+                var direction = Vector3.TransformNormal(ray.Direction, inverse);
+                var localRay = new Ray(Vector3.Transform(ray.Position, inverse), Vector3.Normalize(direction));
+                if (gameObject is SimpleCube) TestBounds(new BoundingBox(new Vector3(-0.5f), new Vector3(0.5f)));
+                foreach (var component in gameObject.Components)
+                    if (component is ModelRenderComponent renderer && renderer.TryGetModel(out var model))
+                        TestBounds(Raylib.GetModelBoundingBox(model));
+
+                void TestBounds(BoundingBox bounds)
+                {
+                    var collision = Raylib.GetRayCollisionBox(localRay, bounds);
+                    if (!collision.Hit || collision.Distance < 0f) return;
+                    var point = Vector3.Transform(localRay.Position + localRay.Direction * collision.Distance, world);
+                    var distance = Vector3.Distance(ray.Position, point);
+                    if (distance < nearestDistance) nearestDistance = distance;
+                }
+            }
+
+            if (nearestDistance < bestDist)
+            {
+                bestDist = nearestDistance;
                 bestGameObject = gameObject;
             }
 

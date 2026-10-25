@@ -1,5 +1,7 @@
 using System.Numerics;
+using System.Text.Json;
 using AlpacaEngine.GameObjects;
+using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;
 using Raylib_cs;
 
@@ -22,11 +24,80 @@ public static class EditorState
             Inspector.FinishEdit();
             CommandManager.Clear();
             Selected = null;
+            CurrentScenePath = null;
             field = value;
         }
     } = new();
 
+    public static string? CurrentScenePath { get; private set; }
+
+    private static readonly JsonSerializerOptions SceneJsonOptions = new()
+    {
+        IncludeFields = true,
+        IgnoreReadOnlyProperties = true,
+        WriteIndented = true
+    };
+
+    public static string CreateScene(string folder, string name)
+    {
+        name = name.Trim();
+        if (name.EndsWith(".scene", StringComparison.OrdinalIgnoreCase)) name = name[..^6].Trim();
+        if (string.IsNullOrWhiteSpace(name) || name is "." or ".."
+            || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || name.Contains('/') || name.Contains('\\'))
+            throw new ArgumentException("Enter a valid scene name.");
+
+        var path = Path.GetFullPath(Path.Combine(folder, name + ".scene"));
+        var scene = new Scene { Name = name, GameObjects = [] };
+        // Never overwrite an existing asset, even if it appeared after the dialog opened.
+        using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
+        JsonSerializer.Serialize(stream, scene, SceneJsonOptions);
+        return path;
+    }
+
+    public static void OpenScene(string path)
+    {
+        path = Path.GetFullPath(path);
+        using var stream = File.OpenRead(path);
+        var scene = JsonSerializer.Deserialize<Scene>(stream, SceneJsonOptions)
+                    ?? throw new JsonException("The scene file is empty.");
+        if (scene.GameObjects == null || !ValidObjects(scene.GameObjects))
+            throw new JsonException("The scene contains an invalid object list.");
+        // Only replace the active scene after the entire file has been loaded successfully.
+        CurrentScene = scene;
+        CurrentScenePath = path;
+    }
+
+    private static bool ValidObjects(List<GameObject> objects) => objects.All(gameObject =>
+        gameObject != null && gameObject.Components != null
+        && gameObject.Components.All(component => component != null)
+        && (gameObject.Child == null || ValidObjects(gameObject.Child)));
+
+    public static void SaveScene()
+    {
+        var path = CurrentScenePath ?? Path.GetFullPath(Path.Combine(
+            WorkingDirectory ?? Directory.GetCurrentDirectory(), CurrentScene.Name + ".scene"));
+        File.WriteAllText(path, JsonSerializer.Serialize(CurrentScene, SceneJsonOptions));
+        CurrentScenePath = path;
+    }
+
     public static string? WorkingDirectory = Directory.GetCurrentDirectory();
+
+    public static void DeleteAsset(string path)
+    {
+        path = Path.GetFullPath(path);
+        var comparer = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+            ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+        var projectPath = CurrentProject == null || string.IsNullOrWhiteSpace(WorkingDirectory)
+            ? null : Path.GetFullPath(Path.Combine(WorkingDirectory, CurrentProject.Name + ".proj"));
+        var deletingScene = comparer.Equals(path, CurrentScenePath);
+        var deletingProject = comparer.Equals(path, projectPath);
+
+        // Reset editing state only after deletion succeeds.
+        File.Delete(path);
+        if (deletingProject) CurrentProject = null;
+        if (deletingScene || deletingProject) CurrentScene = new Scene();
+    }
     
     public static GameObject? Selected;
 
@@ -57,6 +128,26 @@ public static class EditorState
         Inspector.FinishEdit();
         if (target.Name == name) return;
         CommandManager.Do(new ChangeValueCommand<string>(value => target.Name = value, target.Name, name));
+    }
+
+    public static void AddGameObject()
+    {
+        Inspector.FinishEdit();
+        var scene = CurrentScene;
+        var gameObject = new GameObject();
+        CommandManager.Do(new ChangeValueCommand<List<GameObject>>(
+            objects => scene.GameObjects = objects, scene.GameObjects,
+            new List<GameObject>(scene.GameObjects) { gameObject }));
+        Selected = gameObject;
+    }
+
+    public static void AddComponent(GameObject target, IComponent component)
+    {
+        if (!Contains(CurrentScene.GameObjects, target)) return;
+        Inspector.FinishEdit();
+        CommandManager.Do(new ChangeValueCommand<List<IComponent>>(
+            components => target.Components = components, target.Components,
+            new List<IComponent>(target.Components) { component }));
     }
 
     public static void DeleteGameObject(GameObject target)

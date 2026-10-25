@@ -1,11 +1,65 @@
 using System.Numerics;
+using System.Text.Json;
+using AlpacaEngine.Managers;
 using ImGuiNET;
 using Raylib_cs;
 
 namespace AlpacaEngine.Editor;
 
-internal static class AssetBrowser
+internal sealed class AssetBrowser
 {
+    private static readonly AssetBrowser Main = new();
+    private readonly IReadOnlySet<string>? _extensions;
+    private readonly bool _isPicker;
+    private string _search = "";
+    private string? _searchKey;
+    private int _searchRevision = -1;
+    private static int _cacheRevision;
+    private string[] _searchResults = [];
+    private string? _searchWarning;
+
+    internal AssetBrowser(IReadOnlySet<string>? extensions = null)
+    {
+        _extensions = extensions;
+        _isPicker = extensions != null;
+    }
+
+    internal void OpenPicker(string currentPath)
+    {
+        _root = null;
+        _search = "";
+        _selectedFile = null;
+        _initialPath = currentPath;
+        ImGui.OpenPopup("Select model");
+    }
+
+    private string? _initialPath;
+
+    internal string? DrawPicker()
+    {
+        ImGui.SetNextWindowSize(new Vector2(850, 560), ImGuiCond.FirstUseEver);
+        if (!ImGui.BeginPopupModal("Select model")) return null;
+        string? result = null;
+        try
+        {
+            DrawContents();
+            var canSelect = _selectedFile != null && File.Exists(_selectedFile)
+                && _extensions!.Contains(Path.GetExtension(_selectedFile));
+            ImGui.BeginDisabled(!canSelect);
+            if (ImGui.Button("Select"))
+            {
+                result = Path.GetRelativePath(_root!, _selectedFile!);
+                ImGui.CloseCurrentPopup();
+            }
+            ImGui.EndDisabled();
+            ImGui.SameLine();
+            if (ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape, false))
+                ImGui.CloseCurrentPopup();
+            if (_selectedFile != null) ImGui.TextUnformatted(Path.GetRelativePath(_root!, _selectedFile));
+        }
+        finally { ImGui.EndPopup(); }
+        return result;
+    }
     private static Texture2D _folderIcon;
     private static Texture2D _sceneIcon;
     private static Texture2D _projectIcon;
@@ -35,10 +89,11 @@ internal static class AssetBrowser
     private static readonly HashSet<string> SupportedExtensions = new(StringComparer.OrdinalIgnoreCase)
     {
         ".png", ".jpg", ".jpeg", ".bmp", ".tga", ".gif", // images
-        ".scene", ".proj"                                // engine files
+        ".scene", ".proj",                                // engine files
+        ".mtl", ".mat" // materials
     };
 
-    // Windows and macOS compare paths case-insensitively; Linux does not.
+    // Keep case-sensitive volumes distinct; Windows paths are case-insensitive.
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
@@ -47,9 +102,15 @@ internal static class AssetBrowser
     private sealed record Folder(FolderEntry[] Folders, string[] Files, string? Error);
 
     private static readonly Dictionary<string, Folder> Cache = new(PathComparer);
-    private static string? _root;
-    private static string? _selectedFolder;
-    private static string? _selectedFile;
+    private string? _root;
+    private string? _selectedFolder;
+    private string? _selectedFile;
+    private string _sceneName = "New Scene";
+    private string? _createSceneFolder;
+    private string? _sceneError;
+    private bool _openCreateScene;
+    private string? _deleteWarning;
+    private bool _openDeleteWarning;
 
     public static void Render()
     {
@@ -62,7 +123,8 @@ internal static class AssetBrowser
 
         try
         {
-            DrawContents();
+            Main.DrawContents();
+            Main.DrawDeleteWarning();
         }
         finally
         {
@@ -71,7 +133,7 @@ internal static class AssetBrowser
         }
     }
 
-    private static void DrawContents()
+    private void DrawContents()
     {
         string root;
         try
@@ -97,12 +159,37 @@ internal static class AssetBrowser
             _root = root;
             SelectFolder(root);
             Cache.Clear();
+            _cacheRevision++;
+            if (_initialPath != null)
+            {
+                try
+                {
+                    var initial = Path.GetFullPath(_initialPath, root);
+                    var relative = Path.GetRelativePath(root, initial);
+                    if (!Path.IsPathRooted(relative) && relative != ".."
+                        && !relative.StartsWith(".." + Path.DirectorySeparatorChar)
+                        && File.Exists(initial) && !HasLinkedParent(initial, root))
+                    {
+                        SelectFolder(Path.GetDirectoryName(initial)!);
+                        _selectedFile = initial;
+                    }
+                }
+                catch (Exception ex) when (ex is ArgumentException or IOException or NotSupportedException
+                                           or UnauthorizedAccessException) { }
+                _initialPath = null;
+            }
         }
 
         // Folders are read from disk lazily and cached; "Refresh" re-reads them after external changes.
-        if (ImGui.Button("Refresh")) Cache.Clear();
+        if (ImGui.Button("Refresh"))
+        {
+            Cache.Clear();
+            _cacheRevision++;
+        }
         ImGui.SameLine();
         ImGui.TextUnformatted(root);
+        ImGui.SetNextItemWidth(-1);
+        ImGui.InputTextWithHint("##Search", "Search assets in project...", ref _search, 256);
         ImGui.Separator();
 
         if (!Directory.Exists(root))
@@ -115,7 +202,8 @@ internal static class AssetBrowser
 
         // A resizable two-column table acts as the splitter. Child windows scroll independently.
         if (!ImGui.BeginTable("AssetBrowserLayout", 2,
-                ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV)) return;
+                ImGuiTableFlags.Resizable | ImGuiTableFlags.BordersInnerV,
+                new Vector2(0, _isPicker ? MathF.Max(100, ImGui.GetContentRegionAvail().Y - 65) : 0))) return;
 
         ImGui.TableSetupColumn("Folders", ImGuiTableColumnFlags.WidthFixed, 220);
         ImGui.TableSetupColumn("Files", ImGuiTableColumnFlags.WidthStretch);
@@ -129,16 +217,120 @@ internal static class AssetBrowser
         ImGui.EndChild();
 
         ImGui.TableSetColumnIndex(1);
-        if (ImGui.BeginChild("FolderFiles")) DrawFiles();
+        if (ImGui.BeginChild("FolderFiles"))
+        {
+            DrawFiles();
+            if (!_isPicker)
+            {
+                DrawContextMenu();
+                DrawCreateScenePopup();
+            }
+            if (_sceneError != null) ImGui.TextWrapped(_sceneError);
+        }
         ImGui.EndChild();
         ImGui.EndTable();
     }
 
-    private static void SelectFolder(string path)
+    private void SelectFolder(string path)
     {
         _selectedFolder = path;
         // File selection belongs to the current folder, not to the scene object selection.
         _selectedFile = null;
+        _sceneError = null;
+    }
+
+    private void DrawContextMenu()
+    {
+        if (!ImGui.BeginPopupContextWindow("AssetContext",
+                ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems)) return;
+        if (ImGui.MenuItem("New Scene"))
+        {
+            _createSceneFolder = _selectedFolder;
+            _sceneName = "New Scene";
+            _sceneError = null;
+            _openCreateScene = true;
+        }
+        ImGui.EndPopup();
+    }
+
+    private void DrawCreateScenePopup()
+    {
+        var focusName = _openCreateScene;
+        if (_openCreateScene)
+        {
+            ImGui.OpenPopup("New Scene");
+            _openCreateScene = false;
+        }
+        if (!ImGui.BeginPopupModal("New Scene", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        if (focusName) ImGui.SetKeyboardFocusHere();
+        var submitted = ImGui.InputText("Name", ref _sceneName, 256,
+            ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+        if (ImGui.Button("Create") || submitted)
+        {
+            try
+            {
+                _selectedFile = EditorState.CreateScene(_createSceneFolder!, _sceneName);
+                Cache.Remove(_createSceneFolder!);
+                _cacheRevision++;
+                _sceneError = null;
+                ImGui.CloseCurrentPopup();
+            }
+            catch (Exception ex) when (IsSceneFileError(ex))
+            {
+                _sceneError = $"Cannot create scene: {ex.Message}";
+            }
+        }
+        ImGui.SameLine();
+        if (ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape, false))
+        {
+            _sceneError = null;
+            ImGui.CloseCurrentPopup();
+        }
+        if (_sceneError != null) ImGui.TextWrapped(_sceneError);
+        ImGui.EndPopup();
+    }
+
+    private static bool IsSceneFileError(Exception ex) => ex is IOException or UnauthorizedAccessException
+        or ArgumentException or NotSupportedException or JsonException or System.Security.SecurityException;
+
+    private void DrawFileContextMenu(string file)
+    {
+        if (!ImGui.BeginPopupContextItem("FileContext")) return;
+        _selectedFile = file;
+        if (ImGui.MenuItem("Delete"))
+        {
+            try
+            {
+                EditorState.DeleteAsset(file);
+                Cache.Remove(Path.GetDirectoryName(file)!);
+                _cacheRevision++;
+                _selectedFile = null;
+                _sceneError = null;
+            }
+            catch (Exception ex) when (IsSceneFileError(ex))
+            {
+                _deleteWarning = $"Cannot delete file: {ex.Message}";
+                _openDeleteWarning = true;
+            }
+        }
+        ImGui.EndPopup();
+    }
+
+    private void DrawDeleteWarning()
+    {
+        if (_openDeleteWarning)
+        {
+            ImGui.OpenPopup("Cannot delete asset");
+            _openDeleteWarning = false;
+        }
+        if (!ImGui.BeginPopupModal("Cannot delete asset", ImGuiWindowFlags.AlwaysAutoResize)) return;
+        ImGui.TextUnformatted(_deleteWarning);
+        if (ImGui.Button("OK") || ImGui.IsKeyPressed(ImGuiKey.Escape, false))
+        {
+            _deleteWarning = null;
+            ImGui.CloseCurrentPopup();
+        }
+        ImGui.EndPopup();
     }
 
     private static Folder ReadFolder(string path)
@@ -154,7 +346,9 @@ internal static class AssetBrowser
                     (entry.Attributes & FileAttributes.ReparsePoint) != 0)).ToArray();
             // Filter files only: all folders remain available for tree navigation.
             var files = entries.Where(entry => (entry.Attributes & FileAttributes.Directory) == 0
-                                                && SupportedExtensions.Contains(entry.Extension))
+                                                && (entry.Attributes & FileAttributes.ReparsePoint) == 0
+                                                && (SupportedExtensions.Contains(entry.Extension)
+                                                    || ModelManager.SupportedExtensions.Contains(entry.Extension)))
                 .OrderBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
                 .Select(entry => entry.FullName).ToArray();
             contents = new Folder(folders, files, null);
@@ -169,7 +363,7 @@ internal static class AssetBrowser
         return contents;
     }
 
-    private static void DrawFolder(FolderEntry folder, bool isRoot = false)
+    private void DrawFolder(FolderEntry folder, bool isRoot = false)
     {
         // Do not follow links/junctions: they may leave the project or form cycles.
         var flags = ImGuiTreeNodeFlags.OpenOnArrow | ImGuiTreeNodeFlags.SpanAvailWidth;
@@ -207,11 +401,14 @@ internal static class AssetBrowser
         ImGui.PopID();
     }
 
-    private static void DrawFiles()
+    private void DrawFiles()
     {
         if (_selectedFolder == null) return;
+
+        var searching = !string.IsNullOrWhiteSpace(_search);
         var relative = Path.GetRelativePath(_root!, _selectedFolder);
-        ImGui.TextUnformatted(relative == "." ? Path.GetFileName(_root) : relative);
+        ImGui.TextUnformatted(searching ? "Search results (entire project)"
+            : relative == "." ? Path.GetFileName(_root) : relative);
         ImGui.Separator();
 
         var contents = ReadFolder(_selectedFolder);
@@ -221,11 +418,14 @@ internal static class AssetBrowser
             return;
         }
         // Clear stale selection after a file is deleted or moved outside the editor.
-        if (_selectedFile != null && !contents.Files.Contains(_selectedFile, PathComparer))
+        var files = searching ? SearchFiles() : contents.Files.Where(MatchesExtension).ToArray();
+        if (_selectedFile != null && !files.Contains(_selectedFile, PathComparer))
             _selectedFile = null;
-        if (contents.Files.Length == 0)
+        if (searching && _searchWarning != null) ImGui.TextWrapped(_searchWarning);
+
+        if (files.Length == 0)
         {
-            ImGui.TextDisabled("No supported asset files in this folder.");
+            ImGui.TextDisabled(searching ? "No matching assets found." : "No supported asset files in this folder.");
             return;
         }
 
@@ -235,9 +435,10 @@ internal static class AssetBrowser
         var available = ImGui.GetContentRegionAvail().X;
         var columns = Math.Clamp((int)((available + spacing.X) / (tileWidth + spacing.X)), 1, 64);
         var width = MathF.Max(1, (available - spacing.X * (columns - 1)) / columns);
-        for (var i = 0; i < contents.Files.Length; i++)
+
+        for (var i = 0; i < files.Length; i++)
         {
-            var file = contents.Files[i];
+            var file = files[i];
             // SameLine continues the current row; omitting it starts the next row.
             if (i % columns != 0) ImGui.SameLine();
             ImGui.PushID(file);
@@ -246,11 +447,58 @@ internal static class AssetBrowser
             if (selected) ImGui.PushStyleColor(ImGuiCol.Button, ImGui.GetStyle().Colors[(int)ImGuiCol.HeaderActive]);
             if (ImGui.Button("##file", new Vector2(width, 88))) _selectedFile = file;
             if (selected) ImGui.PopStyleColor();
+            if (!_isPicker && ImGui.IsItemHovered() && ImGui.IsMouseDoubleClicked(ImGuiMouseButton.Left)
+                && string.Equals(Path.GetExtension(file), ".scene", StringComparison.OrdinalIgnoreCase))
+            {
+                _selectedFile = file;
+                try
+                {
+                    EditorState.OpenScene(file);
+                    _sceneError = null;
+                }
+                catch (Exception ex) when (IsSceneFileError(ex))
+                {
+                    _sceneError = $"Cannot open scene: {ex.Message}";
+                }
+            }
             if (ImGui.IsItemHovered()) ImGui.SetTooltip(file);
 
             DrawFileTile(file, width);
+            if (!_isPicker) DrawFileContextMenu(file);
             ImGui.PopID();
         }
+    }
+
+    private bool MatchesExtension(string file) => _extensions == null || _extensions.Contains(Path.GetExtension(file));
+
+    private string[] SearchFiles()
+    {
+        var query = _search.Trim();
+        if (_searchKey == query && _searchRevision == _cacheRevision) return _searchResults;
+        var results = new List<string>();
+        _searchWarning = null;
+        var pending = new Stack<string>();
+        pending.Push(_root!);
+        while (pending.TryPop(out var folder))
+        {
+            var contents = ReadFolder(folder);
+            if (contents.Error != null) _searchWarning = "Some folders could not be read. Use Refresh to retry.";
+            results.AddRange(contents.Files.Where(file => MatchesExtension(file)
+                && Path.GetRelativePath(_root!, file).Contains(query, StringComparison.OrdinalIgnoreCase)));
+            foreach (var child in contents.Folders)
+                if (!child.IsLink) pending.Push(child.Path);
+        }
+        _searchKey = query;
+        _searchRevision = _cacheRevision;
+        return _searchResults = results.OrderBy(file => file, StringComparer.OrdinalIgnoreCase).ToArray();
+    }
+
+    private static bool HasLinkedParent(string file, string root)
+    {
+        for (var directory = Path.GetDirectoryName(file); directory != null && !PathComparer.Equals(directory, root);
+             directory = Path.GetDirectoryName(directory))
+            if ((File.GetAttributes(directory) & FileAttributes.ReparsePoint) != 0) return true;
+        return (File.GetAttributes(file) & FileAttributes.ReparsePoint) != 0;
     }
 
     // The button handles interaction; its icon and filename are drawn manually

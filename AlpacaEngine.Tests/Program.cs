@@ -2,6 +2,8 @@ using System.Numerics;
 using AlpacaEngine;
 using AlpacaEngine.Editor;
 using AlpacaEngine.GameObjects;
+using AlpacaEngine.GameObjects.Components;
+using AlpacaEngine.Extentions;
 using AlpacaEngine.Managers;
 using Raylib_cs;
 using ImGuiNET;
@@ -11,16 +13,24 @@ static void Check(bool condition, string message)
     if (!condition) throw new Exception(message);
 }
 
+RunAssetBrowserChecks();
+if (args.Contains("--asset-browser-only"))
+{
+    Console.WriteLine("Asset browser checks passed.");
+    return;
+}
+
 CommandManager.Clear();
 CommandManager.Undo();
 CommandManager.Redo();
 Check(!CommandManager.CanUndo && !CommandManager.CanRedo, "Empty history is safe");
 var edited = new SimpleCube();
+var originalName = edited.Name;
 CommandManager.Do(new ChangeValueCommand<string>(value => edited.Name = value, edited.Name, "Renamed"));
 Check(edited.Name == "Renamed" && CommandManager.CanUndo, "Execute change");
 EditorState.Selected = new SimpleCube();
 CommandManager.Undo();
-Check(edited.Name == "Game Object" && CommandManager.CanRedo, "Undo targets original object");
+Check(edited.Name == originalName && CommandManager.CanRedo, "Undo targets original object");
 CommandManager.Redo();
 Check(edited.Name == "Renamed" && !CommandManager.CanRedo, "Redo change");
 CommandManager.Undo();
@@ -64,13 +74,14 @@ CommandManager.Clear();
 var sibling = new SimpleCube();
 var descendant = new SimpleCube();
 var nested = new SimpleCube { Child = [descendant] };
+var originalNestedName = nested.Name;
 var parent = new SimpleCube { Child = [nested, sibling] };
 EditorState.CurrentScene = new Scene { GameObjects = [parent, new SimpleCube()] };
 EditorState.RenameGameObject(nested, "  Nested renamed  ");
 Check(nested.Name == "Nested renamed", "Hierarchy rename trims the name");
 CommandManager.Undo();
-Check(nested.Name == "Game Object", "Undo hierarchy rename");
-EditorState.RenameGameObject(nested, "Game Object");
+Check(nested.Name == originalNestedName, "Undo hierarchy rename");
+EditorState.RenameGameObject(nested, originalNestedName);
 EditorState.RenameGameObject(nested, "  ");
 Check(!CommandManager.CanUndo && CommandManager.CanRedo, "Unchanged and empty names preserve history");
 CommandManager.Redo();
@@ -104,6 +115,173 @@ EditorState.DeleteGameObject(new SimpleCube());
 EditorState.RenameGameObject(new SimpleCube(), "Not in scene");
 Check(!CommandManager.CanUndo, "Objects outside the scene do not create history");
 
+EditorState.AddGameObject();
+var emptyObject = EditorState.Selected!;
+Check(emptyObject.GetType() == typeof(GameObject) && emptyObject.Components.Count == 0,
+    "Add creates and selects a plain empty GameObject");
+CommandManager.Undo();
+EditorState.ValidateSelection();
+Check(!EditorState.CurrentScene.GameObjects.Contains(emptyObject) && EditorState.Selected == null,
+    "Undo empty object creation");
+CommandManager.Redo();
+var modelRenderer = new ModelRenderComponent();
+EditorState.AddComponent(emptyObject, modelRenderer);
+Check(emptyObject.Components.Single() == modelRenderer, "Add model renderer component");
+emptyObject.Render();
+Check(!modelRenderer.TryGetModel(out _), "An unconfigured model renderer is safe without a graphics context");
+CommandManager.Undo();
+Check(emptyObject.Components.Count == 0, "Undo component addition");
+CommandManager.Redo();
+Check(emptyObject.Components.Single() == modelRenderer, "Redo component addition preserves instance");
+CommandManager.Clear();
+
+var transformParent = new GameObject { LocalPosition = new Vector3(3, 4, 5),
+    LocalRotation = new Vector3(15, 40, 10) };
+var transformChild = new GameObject { LocalPosition = Vector3.UnitX,
+    LocalRotation = new Vector3(25, 5, 60), Parent = transformParent };
+var matrixDirection = Vector3.TransformNormal(Vector3.UnitZ, transformChild.WorldMatrix);
+var quaternionDirection = Vector3.Transform(Vector3.UnitZ, transformChild.WorldRotation);
+Check(Vector3.Distance(matrixDirection, quaternionDirection) < 0.0001f,
+    "World quaternion agrees with hierarchical matrix rotation");
+
+static void RunAssetBrowserChecks()
+{
+var assetFolder = Path.Combine(Path.GetTempPath(), "AlpacaAssetTests-" + Guid.NewGuid());
+var nestedAssets = Path.Combine(assetFolder, "Models");
+Directory.CreateDirectory(nestedAssets);
+try
+{
+    var modelAsset = Path.Combine(nestedAssets, "Alpaca.GLB");
+    var imageAsset = Path.Combine(nestedAssets, "Alpaca.png");
+    File.WriteAllText(modelAsset, "test model");
+    File.WriteAllText(imageAsset, "test image");
+    File.WriteAllText(Path.Combine(nestedAssets, "Alpaca.txt"), "unsupported");
+    Directory.CreateSymbolicLink(Path.Combine(nestedAssets, "Cycle"), assetFolder);
+    File.CreateSymbolicLink(Path.Combine(nestedAssets, "Linked.glb"), modelAsset);
+    var browserType = typeof(Inspector).Assembly.GetType("AlpacaEngine.Editor.AssetBrowser")!;
+    const System.Reflection.BindingFlags instanceFlags = System.Reflection.BindingFlags.NonPublic
+        | System.Reflection.BindingFlags.Instance;
+    object Browser(IReadOnlySet<string> extensions, string query)
+    {
+        var browser = Activator.CreateInstance(browserType, instanceFlags, null, new object[] { extensions }, null)!;
+        browserType.GetField("_root", instanceFlags)!.SetValue(browser, assetFolder);
+        browserType.GetField("_search", instanceFlags)!.SetValue(browser, query);
+        return browser;
+    }
+    string[] Search(object browser) => (string[])browserType.GetMethod("SearchFiles", instanceFlags)!.Invoke(browser, null)!;
+    var picker = Browser(ModelManager.SupportedExtensions, "ALPACA");
+    Check(Search(picker).SequenceEqual(new[] { modelAsset }),
+        "Picker search finds nested models case-insensitively and skips other formats and links");
+    var browser = Browser(null, "alpaca");
+    Check(Search(browser).Length == 2, "Main browser searches all supported asset types");
+    browserType.GetField("_search", instanceFlags)!.SetValue(picker, "models");
+    Check(Search(picker).SequenceEqual(new[] { modelAsset }), "Search matches project-relative directory names");
+    browserType.GetField("_search", instanceFlags)!.SetValue(picker, "missing");
+    Check(Search(picker).Length == 0, "Search updates cached results when query changes");
+    Check(ModelManager.SupportedExtensions.Contains(".OBJ") && !ModelManager.SupportedExtensions.Contains(".png"),
+        "Model extension filter is case-insensitive and excludes images");
+}
+finally
+{
+    Directory.Delete(Path.Combine(nestedAssets, "Cycle"));
+    foreach (var file in Directory.GetFiles(nestedAssets)) File.Delete(file);
+    Directory.Delete(nestedAssets);
+    Directory.Delete(assetFolder);
+}
+}
+
+var sceneFolder = Path.Combine(Path.GetTempPath(), "AlpacaSceneTests-" + Guid.NewGuid());
+Directory.CreateDirectory(sceneFolder);
+try
+{
+    var scenePath = EditorState.CreateScene(sceneFolder, " Test Scene.scene ");
+    Check(File.Exists(scenePath), "Create scene writes an asset");
+    EditorState.OpenScene(scenePath);
+    Check(EditorState.CurrentScene.Name == "Test Scene" && EditorState.CurrentScene.GameObjects.Count == 0,
+        "New scene is empty and has the requested name");
+    var savedChild = new SimpleCube { Name = "Child", LocalPosition = new Vector3(1, 2, 3) };
+    var savedParent = new SimpleCube { Name = "Parent", LocalScale = new Vector3(2, 3, 4), Child = [savedChild] };
+    EditorState.CurrentScene.GameObjects.Add(savedParent);
+    EditorState.SaveScene();
+    EditorState.Selected = savedChild;
+    EditorState.RenameGameObject(savedParent, "Unsaved rename");
+    EditorState.OpenScene(scenePath);
+    var loadedParent = EditorState.CurrentScene.GameObjects.Single();
+    Check(loadedParent is SimpleCube && loadedParent.Name == "Parent" && loadedParent.Id == savedParent.Id
+        && loadedParent.LocalScale == savedParent.LocalScale, "Scene round trip preserves type, identity and fields");
+    Check(loadedParent.Child!.Single().Parent == loadedParent
+        && loadedParent.Child[0].LocalPosition == savedChild.LocalPosition, "Scene round trip restores hierarchy and transforms");
+    Check(EditorState.Selected == null && !CommandManager.CanUndo && !CommandManager.CanRedo,
+        "Opening a scene clears selection and history");
+    var componentObject = new GameObject { Components = [new ModelRenderComponent { ModelPath = "assets/test.glb" }] };
+    EditorState.CurrentScene.GameObjects.Add(componentObject);
+    EditorState.SaveScene();
+    EditorState.OpenScene(scenePath);
+    var loadedObject = EditorState.CurrentScene.GameObjects[1];
+    Check(loadedObject.GetType() == typeof(GameObject)
+        && loadedObject.Components.Single() is ModelRenderComponent { ModelPath: "assets/test.glb" },
+        "Plain GameObject and component asset path survive scene round trip");
+    try { EditorState.CreateScene(sceneFolder, "Test Scene"); throw new Exception("Duplicate scene accepted"); }
+    catch (IOException) { }
+    try { EditorState.CreateScene(sceneFolder, "../Outside"); throw new Exception("Invalid name accepted"); }
+    catch (ArgumentException) { }
+    var activeScene = EditorState.CurrentScene;
+    var brokenPath = Path.Combine(sceneFolder, "Broken.scene");
+    File.WriteAllText(brokenPath, "not json");
+    try { EditorState.OpenScene(brokenPath); throw new Exception("Invalid scene accepted"); }
+    catch (System.Text.Json.JsonException) { }
+    Check(EditorState.CurrentScene == activeScene && EditorState.CurrentScenePath == scenePath,
+        "Failed open preserves the active scene and its save path");
+    EditorState.Selected = loadedObject;
+    EditorState.RenameGameObject(loadedObject, "Keep selection and history");
+    foreach (var invalidObject in new[]
+             {
+                 "{\"Components\":null}",
+                 "{\"Components\":[null]}",
+                 "{\"Child\":[{\"Components\":null}]}",
+                 "{\"Child\":[{\"Components\":[null]}]}"
+             })
+    {
+        File.WriteAllText(brokenPath, "{\"GameObjects\":[" + invalidObject + "]}");
+        try { EditorState.OpenScene(brokenPath); throw new Exception("Invalid components accepted"); }
+        catch (System.Text.Json.JsonException) { }
+        Check(EditorState.CurrentScene == activeScene && EditorState.CurrentScenePath == scenePath
+            && EditorState.Selected == loadedObject && CommandManager.CanUndo,
+            "Invalid components preserve the active scene, save path, selection and history");
+    }
+    EditorState.CurrentScene.Name = "Changed display name";
+    EditorState.SaveScene();
+    EditorState.OpenScene(scenePath);
+    Check(EditorState.CurrentScene.Name == "Changed display name", "Save updates the opened asset path");
+    var sceneBeforeDelete = EditorState.CurrentScene;
+    EditorState.Selected = EditorState.CurrentScene.GameObjects[0];
+    EditorState.RenameGameObject(EditorState.Selected, "Before deletion");
+    EditorState.DeleteAsset(Path.Combine(sceneFolder, ".", "Test Scene.scene"));
+    Check(!File.Exists(scenePath) && EditorState.CurrentScene != sceneBeforeDelete
+        && EditorState.CurrentScenePath == null && EditorState.CurrentScene.Name == new Scene().Name
+        && EditorState.CurrentScene.GameObjects.Count == new Scene().GameObjects.Count,
+        "Deleting the edited scene resets to the default scene and normalizes paths");
+    Check(EditorState.Selected == null && !CommandManager.CanUndo && !CommandManager.CanRedo,
+        "Deleting the edited scene clears selection and history");
+    var defaultScene = EditorState.CurrentScene;
+    var disposablePath = EditorState.CreateScene(sceneFolder, "Disposable");
+    EditorState.DeleteAsset(disposablePath);
+    Check(!File.Exists(disposablePath) && EditorState.CurrentScene == defaultScene,
+        "Deleting an inactive scene preserves the current scene");
+    var imagePath = Path.Combine(sceneFolder, "Image.png");
+    File.WriteAllText(imagePath, "test asset");
+    EditorState.DeleteAsset(imagePath);
+    Check(!File.Exists(imagePath), "Delete a non-scene asset");
+    try { EditorState.DeleteAsset(sceneFolder); throw new Exception("Directory deletion accepted"); }
+    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    Check(EditorState.CurrentScene == defaultScene, "Failed deletion preserves editing state");
+}
+finally
+{
+    foreach (var file in Directory.GetFiles(sceneFolder)) File.Delete(file);
+    Directory.Delete(sceneFolder);
+}
+
 Check(Gizmo.IntersectPlane(new Ray(new Vector3(2, 3, 5), -Vector3.UnitZ), Vector3.Zero,
     Vector3.UnitZ, out var hit) && Vector3.Distance(hit, new Vector3(2, 3, 0)) < 0.0001f,
     "Drag plane intersection");
@@ -119,7 +297,7 @@ foreach (var degrees in new[] { new Vector3(20, 40, 60), new Vector3(-70, 130, -
              new Vector3(90, 30, 20), new Vector3(-90, 30, 20), new Vector3(120, -150, 175) })
 {
     var rotation = GameObject.Orientation(degrees);
-    var roundTrip = GameObject.Orientation(Gizmo.EulerDegrees(rotation));
+    var roundTrip = GameObject.Orientation(rotation.ToEulerAngles());
     Check(MathF.Abs(Quaternion.Dot(rotation, roundTrip)) > 0.99999f, "Euler/quaternion round trip: " + degrees);
 }
 var cube = new SimpleCube { LocalPosition = new Vector3(2, 1, 0), LocalScale = new Vector3(2, 4, 6), LocalRotation = new Vector3(0, 90, 0) };
@@ -132,6 +310,15 @@ Raylib.SetConfigFlags(ConfigFlags.HiddenWindow);
 Raylib.InitWindow(640, 480, "Gizmo checks");
 try
 {
+    Rlgl.MatrixMode(MatrixMode.ModelView);
+    transformParent.LocalScale = new Vector3(2, 3, 4);
+    transformChild.PushTransform();
+    var nativeMatrix = Rlgl.GetMatrixTransform();
+    transformChild.PopTransform();
+    var nativePoint = Raymath.Vector3Transform(Vector3.One, nativeMatrix);
+    var expectedPoint = Vector3.Transform(Vector3.One, transformChild.WorldMatrix);
+    Check(Vector3.Distance(nativePoint, expectedPoint) < 0.0001f,
+        "OpenGL matrix matches System.Numerics including translation and parent shear");
     foreach (var projection in new[] { CameraProjection.Perspective, CameraProjection.Orthographic })
     {
         var camera = new Camera3D { Position = new Vector3(0, 0, 10), Target = Vector3.Zero,
@@ -156,6 +343,7 @@ try
         var drawInspector = typeof(Inspector).GetMethod("DrawInspector",
             System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!;
         var inspectorTarget = new SimpleCube();
+        var originalInspectorName = inspectorTarget.Name;
         EditorState.Selected = inspectorTarget;
         void InspectorFrame(Vector2 mouse, bool down, string text = null)
         {
@@ -174,7 +362,7 @@ try
         InspectorFrame(nameMouse, true);
         InspectorFrame(nameMouse, false);
         InspectorFrame(nameMouse, false, "test");
-        Check(inspectorTarget.Name != "Game Object" && !CommandManager.CanUndo,
+        Check(inspectorTarget.Name != originalInspectorName && !CommandManager.CanUndo,
             "Inspector text preview stays out of history");
         var renamed = inspectorTarget.Name;
         var emptyMouse = new Vector2(500, 300);
@@ -182,7 +370,7 @@ try
         InspectorFrame(emptyMouse, false);
         Check(CommandManager.CanUndo, "Leaving Inspector field records edit");
         CommandManager.Undo();
-        Check(inspectorTarget.Name == "Game Object" && !CommandManager.CanUndo, "Inspector name is one Undo");
+        Check(inspectorTarget.Name == originalInspectorName && !CommandManager.CanUndo, "Inspector name is one Undo");
         CommandManager.Redo();
         Check(inspectorTarget.Name == renamed, "Redo Inspector name");
         CommandManager.Clear();
