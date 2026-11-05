@@ -13,7 +13,13 @@ static void Check(bool condition, string message)
     if (!condition) throw new Exception(message);
 }
 
-RunAssetBrowserChecks();
+if (args.Contains("--lighting-only"))
+{
+    LightingChecks.Run();
+    return;
+}
+
+if (!args.Contains("--editor-only")) RunAssetBrowserChecks();
 if (args.Contains("--asset-browser-only"))
 {
     Console.WriteLine("Asset browser checks passed.");
@@ -24,11 +30,11 @@ CommandManager.Clear();
 CommandManager.Undo();
 CommandManager.Redo();
 Check(!CommandManager.CanUndo && !CommandManager.CanRedo, "Empty history is safe");
-var edited = new SimpleCube();
+var edited = new GameObject();
 var originalName = edited.Name;
 CommandManager.Do(new ChangeValueCommand<string>(value => edited.Name = value, edited.Name, "Renamed"));
 Check(edited.Name == "Renamed" && CommandManager.CanUndo, "Execute change");
-EditorState.Selected = new SimpleCube();
+EditorState.Selected = new GameObject();
 CommandManager.Undo();
 Check(edited.Name == originalName && CommandManager.CanRedo, "Undo targets original object");
 CommandManager.Redo();
@@ -43,12 +49,12 @@ CommandManager.Undo();
 Check(edited.LocalPosition == Vector3.Zero, "Undo recorded edit");
 CommandManager.Redo();
 Check(edited.LocalPosition == Vector3.One, "Redo recorded edit");
-EditorState.CurrentScene = new Scene();
+EditorState.CurrentScene = new Scene { GameObjects = [new GameObject()] };
 Check(!CommandManager.CanUndo && !CommandManager.CanRedo && EditorState.Selected == null, "Scene change clears history and selection");
 
 var originalObjects = EditorState.CurrentScene.GameObjects;
-var addedChild = new SimpleCube();
-var addedObject = new SimpleCube { Child = [addedChild] };
+var addedChild = new GameObject();
+var addedObject = new GameObject { Child = [addedChild] };
 var addedObjects = new List<GameObject>(originalObjects) { addedObject };
 CommandManager.Do(new ChangeValueCommand<List<GameObject>>(
     objects => EditorState.CurrentScene.GameObjects = objects, originalObjects, addedObjects));
@@ -71,12 +77,12 @@ EditorState.ValidateSelection();
 Check(EditorState.Selected == originalObjects[0], "Unrelated removal preserves valid selection");
 CommandManager.Clear();
 
-var sibling = new SimpleCube();
-var descendant = new SimpleCube();
-var nested = new SimpleCube { Child = [descendant] };
+var sibling = new GameObject();
+var descendant = new GameObject();
+var nested = new GameObject { Child = [descendant] };
 var originalNestedName = nested.Name;
-var parent = new SimpleCube { Child = [nested, sibling] };
-EditorState.CurrentScene = new Scene { GameObjects = [parent, new SimpleCube()] };
+var parent = new GameObject { Child = [nested, sibling] };
+EditorState.CurrentScene = new Scene { GameObjects = [parent, new GameObject()] };
 EditorState.RenameGameObject(nested, "  Nested renamed  ");
 Check(nested.Name == "Nested renamed", "Hierarchy rename trims the name");
 CommandManager.Undo();
@@ -111,8 +117,8 @@ CommandManager.Undo();
 Check(EditorState.CurrentScene.GameObjects[0] == parent && parent.Child![0] == nested,
     "Undo root deletion restores subtree and order");
 CommandManager.Clear();
-EditorState.DeleteGameObject(new SimpleCube());
-EditorState.RenameGameObject(new SimpleCube(), "Not in scene");
+EditorState.DeleteGameObject(new GameObject());
+EditorState.RenameGameObject(new GameObject(), "Not in scene");
 Check(!CommandManager.CanUndo, "Objects outside the scene do not create history");
 
 EditorState.AddGameObject();
@@ -156,8 +162,15 @@ try
     File.WriteAllText(modelAsset, "test model");
     File.WriteAllText(imageAsset, "test image");
     File.WriteAllText(Path.Combine(nestedAssets, "Alpaca.txt"), "unsupported");
-    Directory.CreateSymbolicLink(Path.Combine(nestedAssets, "Cycle"), assetFolder);
-    File.CreateSymbolicLink(Path.Combine(nestedAssets, "Linked.glb"), modelAsset);
+    try
+    {
+        Directory.CreateSymbolicLink(Path.Combine(nestedAssets, "Cycle"), assetFolder);
+        File.CreateSymbolicLink(Path.Combine(nestedAssets, "Linked.glb"), modelAsset);
+    }
+    catch (IOException exception) when ((exception.HResult & 0xffff) == 1314)
+    {
+        Console.WriteLine("Skipping symbolic-link fixtures: Windows requires the symbolic-link privilege.");
+    }
 
     Check(AssetBrowser.Search(assetFolder, "ALPACA", ModelManager.SupportedExtensions, out _)
         .SequenceEqual(new[] { modelAsset }),
@@ -178,7 +191,8 @@ try
 }
 finally
 {
-    Directory.Delete(Path.Combine(nestedAssets, "Cycle"));
+    if (Directory.Exists(Path.Combine(nestedAssets, "Cycle")))
+        Directory.Delete(Path.Combine(nestedAssets, "Cycle"));
     foreach (var file in Directory.GetFiles(nestedAssets)) File.Delete(file);
     Directory.Delete(nestedAssets);
     Directory.Delete(assetFolder);
@@ -194,15 +208,15 @@ try
     EditorState.OpenScene(scenePath);
     Check(EditorState.CurrentScene.Name == "Test Scene" && EditorState.CurrentScene.GameObjects.Count == 0,
         "New scene is empty and has the requested name");
-    var savedChild = new SimpleCube { Name = "Child", LocalPosition = new Vector3(1, 2, 3) };
-    var savedParent = new SimpleCube { Name = "Parent", LocalScale = new Vector3(2, 3, 4), Child = [savedChild] };
+    var savedChild = new GameObject { Name = "Child", LocalPosition = new Vector3(1, 2, 3) };
+    var savedParent = new GameObject { Name = "Parent", LocalScale = new Vector3(2, 3, 4), Child = [savedChild] };
     EditorState.CurrentScene.GameObjects.Add(savedParent);
     EditorState.SaveScene();
     EditorState.Selected = savedChild;
     EditorState.RenameGameObject(savedParent, "Unsaved rename");
     EditorState.OpenScene(scenePath);
     var loadedParent = EditorState.CurrentScene.GameObjects.Single();
-    Check(loadedParent is SimpleCube && loadedParent.Name == "Parent" && loadedParent.Id == savedParent.Id
+    Check(loadedParent.GetType() == typeof(GameObject) && loadedParent.Name == "Parent" && loadedParent.Id == savedParent.Id
         && loadedParent.LocalScale == savedParent.LocalScale, "Scene round trip preserves type, identity and fields");
     Check(loadedParent.Child!.Single().Parent == loadedParent
         && loadedParent.Child[0].LocalPosition == savedChild.LocalPosition, "Scene round trip restores hierarchy and transforms");
@@ -295,16 +309,38 @@ foreach (var degrees in new[] { new Vector3(20, 40, 60), new Vector3(-70, 130, -
     var roundTrip = GameObject.Orientation(rotation.ToEulerAngles());
     Check(MathF.Abs(Quaternion.Dot(rotation, roundTrip)) > 0.99999f, "Euler/quaternion round trip: " + degrees);
 }
-var cube = new SimpleCube { LocalPosition = new Vector3(2, 1, 0), LocalScale = new Vector3(2, 4, 6), LocalRotation = new Vector3(0, 90, 0) };
-EditorState.CurrentScene.GameObjects.Clear();
-EditorState.CurrentScene.GameObjects.Add(cube);
-Check(Picking.PickAtMouse(new Ray(new Vector3(2, 1, 10), -Vector3.UnitZ)) == cube, "Picking rotated cube");
-Check(Picking.PickAtMouse(new Ray(new Vector3(2, 1, 10), Vector3.UnitZ)) == null, "Picking behind camera");
-
 Raylib.SetConfigFlags(ConfigFlags.HiddenWindow);
 Raylib.InitWindow(640, 480, "Gizmo checks");
 try
 {
+    var modelFolder = Path.Combine(Path.GetTempPath(), "AlpacaPicking-" + Guid.NewGuid());
+    Directory.CreateDirectory(modelFolder);
+
+    try
+    {
+        var modelPath = Path.Combine(modelFolder, "Box.obj");
+        File.WriteAllText(modelPath, "v -0.5 -0.5 -0.5\nv 0.5 -0.5 -0.5\nv 0.5 0.5 -0.5\nv -0.5 0.5 -0.5\nv -0.5 -0.5 0.5\nv 0.5 -0.5 0.5\nv 0.5 0.5 0.5\nv -0.5 0.5 0.5\nf 1 2 3\nf 1 3 4\nf 5 7 6\nf 5 8 7\n");
+        var modelObject = new GameObject
+        {
+            LocalPosition = new Vector3(2, 1, 0), LocalScale = new Vector3(2, 4, 6),
+            LocalRotation = new Vector3(0, 90, 0),
+            Components = [new ModelRenderComponent { ModelPath = modelPath }]
+        };
+        EditorState.CurrentScene = new Scene { GameObjects = [modelObject, new GameObject()] };
+        Check(Picking.PickAtMouse(new Ray(new Vector3(2, 1, 10), -Vector3.UnitZ)) == modelObject,
+            "Picking a rotated and scaled model component");
+        Check(Picking.PickAtMouse(new Ray(new Vector3(2, 1, 10), Vector3.UnitZ)) == null,
+            "Picking behind camera");
+        Check(Picking.PickAtMouse(new Ray(new Vector3(20, 1, 10), -Vector3.UnitZ)) == null,
+            "Picking misses objects without geometry");
+    }
+    finally
+    {
+        ModelManager.UnloadAll();
+        foreach (var file in Directory.GetFiles(modelFolder)) File.Delete(file);
+        Directory.Delete(modelFolder);
+    }
+
     Rlgl.MatrixMode(MatrixMode.ModelView);
     transformParent.LocalScale = new Vector3(2, 3, 4);
     transformChild.PushTransform();
@@ -335,7 +371,69 @@ try
         io.DeltaTime = 1f / 60;
         unsafe { io.NativePtr->IniFilename = null; }
         io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height);
-        var inspectorTarget = new SimpleCube();
+        var deleteChild = new GameObject();
+        var deleteTarget = new GameObject { Child = [deleteChild] };
+        EditorState.CurrentScene = new Scene { GameObjects = [deleteTarget] };
+        EditorState.Selected = deleteTarget;
+
+        void DeleteFrame(bool pressed, bool focusViewport = true, bool textInput = false, bool popup = false)
+        {
+            io.AddKeyEvent(ImGuiKey.Delete, pressed);
+            ImGui.NewFrame();
+            ImGui.Begin("Other panel");
+
+            if (!focusViewport) ImGui.SetWindowFocus();
+
+            ImGui.End();
+            ImGui.Begin("3D Viewport");
+
+            if (focusViewport) ImGui.SetWindowFocus();
+
+            if (popup) ImGui.OpenPopup("Delete blocker");
+
+            // Simulate the backend text-input request independently of window focus.
+            io.WantTextInput = textInput;
+            Inspector.HandleViewportDelete();
+
+            if (ImGui.BeginPopup("Delete blocker"))
+            {
+                ImGui.CloseCurrentPopup();
+                ImGui.EndPopup();
+            }
+
+            ImGui.End();
+            ImGui.Render();
+        }
+
+        DeleteFrame(false);
+        DeleteFrame(true, focusViewport: false);
+        Check(EditorState.CurrentScene.GameObjects.Contains(deleteTarget) && !CommandManager.CanUndo,
+            "Delete in another panel preserves the viewport selection");
+        DeleteFrame(false);
+        DeleteFrame(true, textInput: true);
+        Check(EditorState.CurrentScene.GameObjects.Contains(deleteTarget), "Text input blocks viewport deletion");
+        DeleteFrame(false);
+        DeleteFrame(true, popup: true);
+        Check(EditorState.CurrentScene.GameObjects.Contains(deleteTarget), "A popup blocks viewport deletion");
+        DeleteFrame(false);
+        DeleteFrame(true);
+        Check(EditorState.CurrentScene.GameObjects.Count == 0 && EditorState.Selected == null,
+            "Viewport Delete removes selection and subtree");
+        CommandManager.Undo();
+        Check(EditorState.CurrentScene.GameObjects.Single() == deleteTarget && deleteTarget.Child![0] == deleteChild,
+            "Undo viewport Delete restores the subtree");
+        EditorState.Selected = deleteTarget;
+        DeleteFrame(true);
+        Check(EditorState.CurrentScene.GameObjects.Contains(deleteTarget), "Holding Delete does not repeat deletion");
+        CommandManager.Redo();
+        Check(EditorState.CurrentScene.GameObjects.Count == 0, "Redo viewport Delete");
+        DeleteFrame(false);
+        DeleteFrame(true);
+        Check(!CommandManager.CanRedo, "Delete without a selection is safe");
+        DeleteFrame(false);
+        CommandManager.Clear();
+
+        var inspectorTarget = new GameObject();
         var originalInspectorName = inspectorTarget.Name;
         EditorState.Selected = inspectorTarget;
         void InspectorFrame(Vector2 mouse, bool down, string text = null)
@@ -383,9 +481,28 @@ try
         CommandManager.Redo();
         Check(inspectorTarget.LocalPosition == inspectorPosition, "Redo Inspector drag");
         CommandManager.Clear();
+
+        var inspectorSun = new GameObject { Components = [new SunLightSourceComponent()] };
+        var inspectorLight = (SunLightSourceComponent)inspectorSun.Components[0];
+        EditorState.Selected = inspectorSun;
+        InspectorFrame(Vector2.Zero, false);
+        var intensityMouse = nameMouse + new Vector2(0, 6 * ImGui.GetFrameHeightWithSpacing());
+        InspectorFrame(intensityMouse, true);
+        InspectorFrame(intensityMouse + new Vector2(40, 0), true);
+        Check(inspectorLight.Intensity != 1f && !CommandManager.CanUndo,
+            "Sun intensity previews while dragging in the Inspector");
+        InspectorFrame(intensityMouse + new Vector2(40, 0), false);
+        var editedIntensity = inspectorLight.Intensity;
+        CommandManager.Undo();
+        Check(inspectorLight.Intensity == 1f && !CommandManager.CanUndo,
+            "Sun intensity drag is one Undo");
+        CommandManager.Redo();
+        Check(inspectorLight.Intensity == editedIntensity, "Redo sun intensity edit");
+        CommandManager.Clear();
+
         var camera = new Camera3D { Position = new Vector3(0, 0, 10), Target = Vector3.Zero,
             Up = Vector3.UnitY, FovY = 60, Projection = CameraProjection.Perspective };
-        var target = new SimpleCube();
+        var target = new GameObject();
         EditorState.ViewTexture = new RenderTexture2D { Texture = new Texture2D { Width = 640, Height = 480 } };
         Gizmo.Mode = Gizmo.Operation.Move;
         Gizmo.Local = false;
@@ -456,3 +573,4 @@ try
 }
 finally { Raylib.CloseWindow(); }
 Console.WriteLine("Command history, Inspector and Gizmo checks passed.");
+LightingChecks.Run();

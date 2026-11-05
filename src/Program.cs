@@ -1,6 +1,7 @@
 using System.Numerics;
 using AlpacaEngine.Editor;
 using AlpacaEngine.GameObjects;
+using AlpacaEngine.Rendering;
 using Raylib_cs;
 using rlImGui_cs;
 
@@ -35,6 +36,7 @@ class Program
 
         // all icons go here
         InitializeIcons();
+        SceneLighting.Initialize();
 
         Raylib.MaximizeWindow();
         Raylib.SetTargetFPS(60);
@@ -101,7 +103,9 @@ class Program
             Raylib.DrawGrid(10, 1.0f);
 
             // render 3D
+            SceneLighting.Prepare(EditorState.CurrentScene);
             RenderGameObjects(EditorState.CurrentScene.GameObjects);
+            SceneLighting.DrawGizmos(EditorState.CurrentScene, EditorState.Selected);
 
             Raylib.EndMode3D();
             Raylib.EndTextureMode();
@@ -127,6 +131,7 @@ class Program
 
         // Cleanup resources
         Managers.ModelManager.UnloadAll();
+        SceneLighting.Unload();
         Raylib.UnloadTexture(Inspector.GameObjectIcon);
         AssetBrowser.UnloadIcons();
         Raylib.UnloadRenderTexture(EditorState.ViewTexture);

@@ -5,8 +5,6 @@ using Raylib_cs;
 
 namespace AlpacaEngine.GameObjects;
 
-[JsonPolymorphic]
-[JsonDerivedType(typeof(SimpleCube), "simpleCube")]
 public class GameObject
 {
     public Guid Id = Guid.NewGuid();

@@ -1,17 +1,26 @@
 ## About the Project
-This is a hobby project created for learning purposes; the long-term goal is to develop a simple game based on it.
-The user is likely not very familiar with 3D, so it is best to explain things visually—this approach works best for them.
+This is a hobby project created for educational purposes; the long-term goal is to use it as a foundation for developing a simple game in the style of titles from the mid PlayStation 2 or early PlayStation 3 era.
+The user is likely not very familiar with 3D, so it is best to explain things visually—this approach works best for her.
 
-## Learning Tips
-Before implementing a new feature, ask the user how they envision it working.
-If an idea is flawed or technically unfeasible, explain why—offering hints along the way—and continue the discussion until all issues are resolved.
+## While discussing new feature
+Before you begin implementing a new feature, ask the user how she envision it working—step by step. Layer by layer.
+If the idea has flaws, is technically unfeasible, or if the user’s explanation is incomplete, explain why—offering hints along the way—and continue the discussion until all issues are resolved.
 For example:
-User: "I want to be able to select an object by clicking the mouse. I imagine the user clicks on the screen, we get the mouse coordinates, and then we cast a ray from there."
-You: "That’s cool! But how should the ray know that it has intersected an object?" (Guide the user toward the answer.)
+User: "I want to be able to select an object by clicking the mouse. My idea is: the user clicks on the screen, we get the cursor coordinates, and then we cast a ray from that point."
+You: "But how will the ray know that it has intersected an object?" (Guide the user toward the correct answer by giving her facts and knowledge)
+
+## After implementing feature
+Give user a test at the end; this serves as a great learning opportunity for the user.
+Also, ask the user questions about the code written for this task (this will help her better understand your code)
+For example:
+User: <refines the implementation, making it complete>
+You: <checks implementation as passable>
+You: <implement>
+You: "Done. Here’s a short 5-question quiz to help reinforce what you’ve learned."
 
 ## Writing Code
 Follow the KISS ("Keep It Simple, Stupid"), DRY("Don't Repeat Yourself") and YAGNI ("You Ain't Gonna Need It") principles.
-Strive to write simple, readable code. Keep in mind that the user might want to modify or improve the code themselves later.
+Strive to write simple, readable code. Keep in mind that the user might want to modify or improve the code herself later.
 For example:
 - Add empty lines before and after `if` statements;
 - Break the code into logical blocks using empty lines and separate methods;

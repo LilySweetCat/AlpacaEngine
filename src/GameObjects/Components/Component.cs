@@ -4,6 +4,7 @@ namespace AlpacaEngine.GameObjects.Components;
 
 [JsonPolymorphic]
 [JsonDerivedType(typeof(ModelRenderComponent), "modelRenderer")]
+[JsonDerivedType(typeof(SunLightSourceComponent), "sunLight")]
 public interface IComponent
 {
     public void DrawOnInspector();

@@ -7,5 +7,5 @@ public class Scene
 {
     public string Name { get; set; } = "New Scene";
 
-    public List<GameObject> GameObjects { get; set; } = [new SimpleCube(){Child = [new SimpleCube(){LocalPosition = Vector3.One}] }]; // default scene
+    public List<GameObject> GameObjects { get; set; } = []; // default scene
 }

@@ -35,12 +35,18 @@ public static class Picking
             var world = gameObject.WorldMatrix;
             var nearestDistance = float.MaxValue;
 
+            // The editor sun marker has a fixed world size, independent of scale.
+            if (gameObject.Components.Any(component => component is SunLightSourceComponent))
+            {
+                var collision = Raylib.GetRayCollisionSphere(ray, gameObject.WorldPosition, 0.2f);
+
+                if (collision.Hit && collision.Distance >= 0f) nearestDistance = collision.Distance;
+            }
+
             if (Matrix4x4.Invert(world, out var inverse))
             {
                 var direction = Vector3.TransformNormal(ray.Direction, inverse);
                 var localRay = new Ray(Vector3.Transform(ray.Position, inverse), Vector3.Normalize(direction));
-
-                if (gameObject is SimpleCube) TestBounds(new BoundingBox(new Vector3(-0.5f), new Vector3(0.5f)));
 
                 foreach (var component in gameObject.Components)
                     if (component is ModelRenderComponent renderer && renderer.TryGetModel(out var model))

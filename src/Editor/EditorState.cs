@@ -4,6 +4,7 @@ using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;
 using Raylib_cs;
+using AlpacaEngine.Rendering;
 
 namespace AlpacaEngine.Editor;
 
@@ -70,6 +71,9 @@ public static class EditorState
 
         if (scene.GameObjects == null || !ValidObjects(scene.GameObjects))
             throw new JsonException("The scene contains an invalid object list.");
+
+        if (SceneLighting.GetSuns(scene.GameObjects).Take(2).Count() > 1)
+            throw new JsonException("The scene can contain only one sun light.");
 
         // Only replace the active scene after the entire file has been loaded successfully.
         CurrentScene = scene;
@@ -140,10 +144,29 @@ public static class EditorState
 
     public static void AddGameObject()
     {
+        AddGameObject(new GameObject());
+    }
+
+    public static bool HasSunLight => SceneLighting.GetSuns(CurrentScene.GameObjects).Any();
+
+    public static void AddSunLight()
+    {
+        if (HasSunLight) return;
+
+        AddGameObject(new GameObject
+        {
+            Name = "Sun",
+            LocalPosition = new Vector3(0, 3, 0),
+            LocalRotation = new Vector3(45, -30, 0),
+            Components = [new SunLightSourceComponent()]
+        });
+    }
+
+    private static void AddGameObject(GameObject gameObject)
+    {
         Inspector.FinishEdit();
 
         var scene = CurrentScene;
-        var gameObject = new GameObject();
         CommandManager.Do(new ChangeValueCommand<List<GameObject>>(
             objects => scene.GameObjects = objects, scene.GameObjects,
             new List<GameObject>(scene.GameObjects) { gameObject }));
@@ -153,6 +176,8 @@ public static class EditorState
     public static void AddComponent(GameObject target, IComponent component)
     {
         if (!Contains(CurrentScene.GameObjects, target)) return;
+
+        if (component is SunLightSourceComponent && HasSunLight) return;
 
         Inspector.FinishEdit();
         CommandManager.Do(new ChangeValueCommand<List<IComponent>>(

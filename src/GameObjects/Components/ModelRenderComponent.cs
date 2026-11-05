@@ -1,6 +1,7 @@
 using System.Numerics;
 using AlpacaEngine.Editor;
 using AlpacaEngine.Managers;
+using AlpacaEngine.Rendering;
 using ImGuiNET;
 using Raylib_cs;
 
@@ -49,7 +50,7 @@ public class ModelRenderComponent : IComponent
         // GameObject's complete WorldMatrix is already active in the renderer.
         if (!TryGetModel(out var model)) return;
 
-        Raylib.DrawModel(model, Vector3.Zero, 1f, Color.White);
+        SceneLighting.DrawModel(model, gameObject, Color.White);
     }
 
     public void ProcessOnSelected(GameObject gameObject)

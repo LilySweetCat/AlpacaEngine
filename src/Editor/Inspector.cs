@@ -124,6 +124,9 @@ public static class Inspector
         var hovered = ImGui.IsItemHovered();
         EditorState.ViewportHovered = hovered;
 
+        // The image has no keyboard navigation of its own; clicking it focuses the viewport.
+        if (hovered && ImGui.IsMouseClicked(ImGuiMouseButton.Left)) ImGui.SetWindowFocus();
+
         // The image rect must be captured before the gizmo draws its own items on top.
         var imageMin = ImGui.GetItemRectMin();
         var imageMax = ImGui.GetItemRectMax();
@@ -138,14 +141,21 @@ public static class Inspector
             EditorState.Selected = Picking.PickAtMouse(ray);
         }
 
-        if (ImGui.IsWindowFocused() && !ImGui.IsAnyItemActive()
-            && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
-            && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId)
-            && ImGui.IsKeyPressed(ImGuiKey.Delete, false)
-            && EditorState.Selected != null)
-            EditorState.DeleteGameObject(EditorState.Selected);
+        HandleViewportDelete();
 
         ImGui.End();
+    }
+
+    internal static void HandleViewportDelete()
+    {
+        if (ImGui.IsWindowFocused() && !ImGui.IsAnyItemActive()
+            && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
+            && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel)
+            && ImGui.IsKeyPressed(ImGuiKey.Delete, false)
+            && EditorState.Selected != null)
+        {
+            EditorState.DeleteGameObject(EditorState.Selected);
+        }
     }
 
     internal static void DrawInspector()
@@ -208,7 +218,7 @@ public static class Inspector
         ImGui.End();
     }
 
-    private static void TrackEdit<T>(GameObject target, string property, T before, Func<T> getValue, Action<T> setValue)
+    internal static void TrackEdit<T>(GameObject target, string property, T before, Func<T> getValue, Action<T> setValue)
     {
         if (ImGui.IsItemActivated())
         {
@@ -241,6 +251,8 @@ public static class Inspector
         if (ImGui.BeginPopupContextWindow("ctx_empty", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
         {
             if (ImGui.MenuItem("Add GameObject")) EditorState.AddGameObject();
+
+            if (ImGui.MenuItem("Add Sun Light", "", false, !EditorState.HasSunLight)) EditorState.AddSunLight();
 
             ImGui.EndPopup();
         }
