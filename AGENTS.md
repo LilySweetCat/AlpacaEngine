@@ -3,7 +3,7 @@ This is a hobby project created for educational purposes; the long-term goal is 
 The user is likely not very familiar with 3D, so it is best to explain things visually—this approach works best for her.
 
 ## While discussing new feature
-Before you begin implementing a new feature, ask the user how she envision it working—step by step. Layer by layer.
+Before you begin implementing a new feature, ask the user how she envision it working—step by step. Layer by layer. From idea to code itself(Do I need to use pattern? which class to update? Teach user to understand code).
 If the idea has flaws, is technically unfeasible, or if the user’s explanation is incomplete, explain why—offering hints along the way—and continue the discussion until all issues are resolved.
 For example:
 User: "I want to be able to select an object by clicking the mouse. My idea is: the user clicks on the screen, we get the cursor coordinates, and then we cast a ray from that point."

@@ -108,6 +108,12 @@ internal sealed class AssetBrowser
     private bool _openCreateScene;
     private string? _deleteWarning;
     private bool _openDeleteWarning;
+    private string _folderName = "New Folder";
+    private string? _createFolderParent;
+    private string? _deleteFolder;
+    private string? _folderError;
+    private bool _openCreateFolder;
+    private bool _openDeleteFolder;
 
     public static void Render()
     {
@@ -121,6 +127,8 @@ internal sealed class AssetBrowser
         try
         {
             Main.DrawContents();
+            Main.HandleFolderDelete();
+            Main.DrawFolderPopups();
             Main.DrawDeleteWarning();
         }
         finally
@@ -155,6 +163,11 @@ internal sealed class AssetBrowser
         if (!EditorState.PathComparer.Equals(root, _root))
         {
             _root = root;
+            _createFolderParent = null;
+            _deleteFolder = null;
+            _openCreateFolder = false;
+            _openDeleteFolder = false;
+            _folderError = null;
             SelectFolder(root);
             Cache.Clear();
 
@@ -212,6 +225,8 @@ internal sealed class AssetBrowser
                 ImGuiWindowFlags.HorizontalScrollbar))
         {
             DrawFolder(new FolderEntry(root, false), isRoot: true);
+
+            if (!IsPicker) DrawContextMenu(includeScenes: false);
         }
 
         ImGui.EndChild();
@@ -243,12 +258,12 @@ internal sealed class AssetBrowser
         _sceneError = null;
     }
 
-    private void DrawContextMenu()
+    private void DrawContextMenu(bool includeScenes = true)
     {
         if (!ImGui.BeginPopupContextWindow("AssetContext",
                 ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems)) return;
 
-        if (ImGui.MenuItem("New Scene"))
+        if (includeScenes && ImGui.MenuItem("New Scene"))
         {
             _createSceneFolder = _selectedFolder;
             _sceneName = "New Scene";
@@ -256,8 +271,139 @@ internal sealed class AssetBrowser
             _openCreateScene = true;
         }
 
+        DrawNewFolderMenuItem(_selectedFolder!);
+
         ImGui.EndPopup();
     }
+
+    private void DrawNewFolderMenuItem(string parent)
+    {
+        if (!ImGui.MenuItem("New Folder")) return;
+
+        _createFolderParent = parent;
+        _folderName = "New Folder";
+        _folderError = null;
+        _openCreateFolder = true;
+    }
+
+    private void RequestFolderDelete(string path)
+    {
+        _deleteFolder = path;
+        _folderError = null;
+        _openDeleteFolder = true;
+    }
+
+    private void HandleFolderDelete()
+    {
+        if (ImGui.IsWindowFocused(ImGuiFocusedFlags.RootAndChildWindows)
+            && !ImGui.IsAnyItemActive() && !ImGui.GetIO().WantTextInput
+            && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel)
+            && ImGui.IsKeyPressed(ImGuiKey.Delete, false)
+            && _selectedFile == null && _selectedFolder != null
+            && !EditorState.PathComparer.Equals(_selectedFolder, _root))
+        {
+            RequestFolderDelete(_selectedFolder);
+        }
+    }
+
+    private void DrawFolderPopups()
+    {
+        var focusName = _openCreateFolder;
+
+        if (_openCreateFolder)
+        {
+            ImGui.OpenPopup("New Folder");
+            _openCreateFolder = false;
+        }
+
+        if (ImGui.BeginPopupModal("New Folder", ImGuiWindowFlags.AlwaysAutoResize))
+        {
+            if (_createFolderParent == null)
+            {
+                ImGui.CloseCurrentPopup();
+                ImGui.EndPopup();
+                return;
+            }
+
+            if (focusName) ImGui.SetKeyboardFocusHere();
+
+            var submitted = ImGui.InputText("Name", ref _folderName, 256,
+                ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
+
+            if (ImGui.Button("Create") || submitted)
+            {
+                try
+                {
+                    EditorState.CreateAssetFolder(_createFolderParent, _folderName);
+                    Cache.Clear();
+                    _folderError = null;
+                    ImGui.CloseCurrentPopup();
+                }
+                catch (Exception ex) when (IsFolderError(ex))
+                {
+                    _folderError = $"Cannot create folder: {ex.Message}";
+                }
+            }
+
+            ImGui.SameLine();
+
+            if (ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape, false))
+                ImGui.CloseCurrentPopup();
+
+            if (_folderError != null) ImGui.TextWrapped(_folderError);
+
+            ImGui.EndPopup();
+        }
+
+        if (_openDeleteFolder)
+        {
+            ImGui.OpenPopup("Delete Folder");
+            _openDeleteFolder = false;
+        }
+
+        if (!ImGui.BeginPopupModal("Delete Folder", ImGuiWindowFlags.AlwaysAutoResize)) return;
+
+        if (_deleteFolder == null)
+        {
+            ImGui.CloseCurrentPopup();
+            ImGui.EndPopup();
+            return;
+        }
+
+        ImGui.TextUnformatted($"Delete folder: {_deleteFolder}");
+        ImGui.TextUnformatted("All files and subfolders will be permanently deleted. This cannot be undone.");
+
+        if (ImGui.Button("Delete"))
+        {
+            try
+            {
+                EditorState.DeleteAssetFolder(_deleteFolder);
+                SelectFolder(Path.GetDirectoryName(_deleteFolder)!);
+                _folderError = null;
+                ImGui.CloseCurrentPopup();
+            }
+            catch (Exception ex) when (IsFolderError(ex))
+            {
+                _folderError = $"Cannot delete folder: {ex.Message}";
+            }
+            finally
+            {
+                // Refresh even after a partial deletion caused by a locked file.
+                Cache.Clear();
+            }
+        }
+
+        ImGui.SameLine();
+
+        if (ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape, false))
+            ImGui.CloseCurrentPopup();
+
+        if (_folderError != null) ImGui.TextWrapped(_folderError);
+
+        ImGui.EndPopup();
+    }
+
+    private static bool IsFolderError(Exception ex) => IsSceneFileError(ex) || ex is InvalidOperationException;
 
     private void DrawCreateScenePopup()
     {
@@ -415,6 +561,16 @@ internal sealed class AssetBrowser
         drawList.AddImage((nint)_folderIcon.Id, iconMin, iconMin + new Vector2(iconSize));
         drawList.AddText(iconMin + new Vector2(iconSize + ImGui.GetStyle().ItemInnerSpacing.X, 0),
             ImGui.GetColorU32(ImGuiCol.Text), name.Length == 0 ? folder.Path : name);
+
+        if (!IsPicker && !folder.IsLink && ImGui.BeginPopupContextItem("FolderContext"))
+        {
+            SelectFolder(folder.Path);
+            DrawNewFolderMenuItem(folder.Path);
+
+            if (ImGui.MenuItem("Delete", "Del", false, !isRoot)) RequestFolderDelete(folder.Path);
+
+            ImGui.EndPopup();
+        }
 
         if (open)
         {

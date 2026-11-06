@@ -95,6 +95,78 @@ public static class EditorState
 
     public static string? WorkingDirectory = Directory.GetCurrentDirectory();
 
+    public static string CreateAssetFolder(string parent, string name)
+    {
+        name = name.Trim();
+
+        if (string.IsNullOrWhiteSpace(name) || name is "." or ".."
+            || name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+            || name.Contains('/') || name.Contains('\\') || name.EndsWith('.'))
+            throw new ArgumentException("Enter a valid folder name without a trailing dot.");
+
+        parent = ValidateAssetFolder(parent, allowRoot: true);
+        var path = Path.Combine(parent, name);
+
+        if (Directory.Exists(path) || File.Exists(path))
+            throw new IOException("An item with this name already exists.");
+
+        Directory.CreateDirectory(path);
+        return path;
+    }
+
+    public static void DeleteAssetFolder(string path)
+    {
+        path = ValidateAssetFolder(path, allowRoot: false);
+        var deletingScene = CurrentScenePath != null && IsPathInside(path, CurrentScenePath);
+
+        try
+        {
+            // Recursive deletion removes contents too, but does not follow directory junctions.
+            Directory.Delete(path, recursive: true);
+        }
+        finally
+        {
+            // A failed recursive deletion can still have removed some of its files.
+            if (deletingScene && !File.Exists(CurrentScenePath)) CurrentScene = new Scene();
+        }
+    }
+
+    private static string ValidateAssetFolder(string path, bool allowRoot)
+    {
+        if (string.IsNullOrWhiteSpace(WorkingDirectory))
+            throw new InvalidOperationException("Working directory is not set.");
+
+        var root = Path.TrimEndingDirectorySeparator(Path.GetFullPath(WorkingDirectory));
+        path = Path.TrimEndingDirectorySeparator(Path.GetFullPath(path));
+
+        if (!(allowRoot && PathComparer.Equals(root, path)) && !IsPathInside(root, path))
+            throw new ArgumentException("Choose a folder inside the project. The project root cannot be deleted.");
+
+        // Reject links anywhere along the path, including the project root.
+        var current = path;
+
+        while (true)
+        {
+            if ((File.GetAttributes(current) & FileAttributes.ReparsePoint) != 0)
+                throw new IOException("Folder operations through symbolic links are not supported.");
+
+            if (PathComparer.Equals(current, root)) break;
+
+            current = Path.GetDirectoryName(current)!;
+        }
+
+        if (!Directory.Exists(path)) throw new DirectoryNotFoundException("The folder no longer exists.");
+
+        return path;
+    }
+
+    private static bool IsPathInside(string parent, string path)
+    {
+        var relative = Path.GetRelativePath(parent, path);
+        return !Path.IsPathRooted(relative) && relative != "." && relative != ".."
+            && !relative.StartsWith(".." + Path.DirectorySeparatorChar);
+    }
+
     public static void DeleteAsset(string path)
     {
         path = Path.GetFullPath(path);

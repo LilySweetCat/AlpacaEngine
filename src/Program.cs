@@ -119,7 +119,7 @@ class Program
             // Start ImGui Frame Processing
             rlImGui.Begin();
 
-            Inspector.Render();
+            EditorUI.Render();
 
             // ============================================================
             // STAGE 3: Cleanup: End ImGui Processing Frame and draw metadata
@@ -132,7 +132,7 @@ class Program
         // Cleanup resources
         Managers.ModelManager.UnloadAll();
         SceneLighting.Unload();
-        Raylib.UnloadTexture(Inspector.GameObjectIcon);
+        Raylib.UnloadTexture(Hierarchy.GameObjectIcon);
         AssetBrowser.UnloadIcons();
         Raylib.UnloadRenderTexture(EditorState.ViewTexture);
         rlImGui.Shutdown();
@@ -142,9 +142,9 @@ class Program
     private static void InitializeIcons()
     {
         AssetBrowser.LoadIcons();
-        Inspector.GameObjectIcon = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "gameobject.png"));
+        Hierarchy.GameObjectIcon = Raylib.LoadTexture(Path.Combine(AppContext.BaseDirectory, "assets", "icons", "gameobject.png"));
 
-        Raylib.SetTextureFilter(Inspector.GameObjectIcon, TextureFilter.Bilinear);
+        Raylib.SetTextureFilter(Hierarchy.GameObjectIcon, TextureFilter.Bilinear);
     }
 
     private static void RenderGameObjects(List<GameObject> gameObjects)

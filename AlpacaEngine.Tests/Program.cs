@@ -13,13 +13,23 @@ static void Check(bool condition, string message)
     if (!condition) throw new Exception(message);
 }
 
+if (args.Contains("--hierarchy-only"))
+{
+    HierarchyChecks.Run();
+    return;
+}
+
 if (args.Contains("--lighting-only"))
 {
     LightingChecks.Run();
     return;
 }
 
-if (!args.Contains("--editor-only")) RunAssetBrowserChecks();
+if (!args.Contains("--editor-only"))
+{
+    RunAssetBrowserChecks();
+    AssetFolderChecks.Run();
+}
 if (args.Contains("--asset-browser-only"))
 {
     Console.WriteLine("Asset browser checks passed.");
@@ -393,7 +403,7 @@ try
 
             // Simulate the backend text-input request independently of window focus.
             io.WantTextInput = textInput;
-            Inspector.HandleViewportDelete();
+            Viewport.HandleDelete();
 
             if (ImGui.BeginPopup("Delete blocker"))
             {
@@ -446,7 +456,7 @@ try
             ImGui.NewFrame();
             ImGui.SetNextWindowPos(Vector2.Zero);
             ImGui.SetNextWindowSize(io.DisplaySize);
-            Inspector.DrawInspector();
+            Inspector.Render();
             ImGui.Render();
         }
         InspectorFrame(Vector2.Zero, false);
@@ -574,3 +584,4 @@ try
 finally { Raylib.CloseWindow(); }
 Console.WriteLine("Command history, Inspector and Gizmo checks passed.");
 LightingChecks.Run();
+HierarchyChecks.Run();
