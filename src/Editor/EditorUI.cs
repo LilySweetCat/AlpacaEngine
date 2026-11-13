@@ -1,5 +1,6 @@
 using AlpacaEngine.Managers;
 using ImGuiNET;
+using AlpacaEngine.Logging;
 
 namespace AlpacaEngine.Editor;
 
@@ -25,6 +26,8 @@ public static class EditorUI
         // PANEL D: Assets browser
         AssetBrowser.Render();
 
+        LogWindow.Render();
+
         // Active widgets keep their own Undo (notably InputText); do not interrupt a drag.
         if (!ImGui.IsAnyItemActive() && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
             && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel)
@@ -42,7 +45,7 @@ public static class EditorUI
 
         if (ImGui.BeginMenu("Scene"))
         {
-            if (ImGui.MenuItem("Save Scene", "Ctrl+S")) EditorState.SaveScene();
+            if (ImGui.MenuItem("Save Scene", "Ctrl+S")) SaveScene();
 
             ImGui.EndMenu();
         }
@@ -70,7 +73,28 @@ public static class EditorUI
             ImGui.EndMenu();
         }
 
+        if (ImGui.BeginMenu("Editor"))
+        {
+            ImGui.MenuItem("Logs", "", ref LogWindow.IsOpen);
+            ImGui.EndMenu();
+        }
+
         ImGui.EndMainMenuBar();
+    }
+
+    private static void SaveScene()
+    {
+        try
+        {
+            EditorState.SaveScene();
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
+            or ArgumentException or NotSupportedException or System.Text.Json.JsonException
+            or System.Security.SecurityException)
+        {
+            Logger.Write(LogLevel.Error, "Cannot save scene.", exception);
+            LogWindow.IsOpen = true;
+        }
     }
 
 }

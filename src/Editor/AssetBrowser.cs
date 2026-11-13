@@ -3,6 +3,7 @@ using System.Text.Json;
 using AlpacaEngine.Managers;
 using ImGuiNET;
 using Raylib_cs;
+using AlpacaEngine.Logging;
 
 namespace AlpacaEngine.Editor;
 
@@ -342,6 +343,7 @@ internal sealed class AssetBrowser
                 catch (Exception ex) when (IsFolderError(ex))
                 {
                     _folderError = $"Cannot create folder: {ex.Message}";
+                    Logger.Write(LogLevel.Error, $"Cannot create folder '{_folderName}' in: {_createFolderParent}", ex);
                 }
             }
 
@@ -385,6 +387,7 @@ internal sealed class AssetBrowser
             catch (Exception ex) when (IsFolderError(ex))
             {
                 _folderError = $"Cannot delete folder: {ex.Message}";
+                Logger.Write(LogLevel.Error, $"Cannot delete folder: {_deleteFolder}", ex);
             }
             finally
             {
@@ -434,6 +437,7 @@ internal sealed class AssetBrowser
             catch (Exception ex) when (IsSceneFileError(ex))
             {
                 _sceneError = $"Cannot create scene: {ex.Message}";
+                Logger.Write(LogLevel.Error, $"Cannot create scene '{_sceneName}' in: {_createSceneFolder}", ex);
             }
         }
 
@@ -471,6 +475,7 @@ internal sealed class AssetBrowser
             catch (Exception ex) when (IsSceneFileError(ex))
             {
                 _deleteWarning = $"Cannot delete file: {ex.Message}";
+                Logger.Write(LogLevel.Error, $"Cannot delete asset: {file}", ex);
                 _openDeleteWarning = true;
             }
         }
@@ -526,6 +531,7 @@ internal sealed class AssetBrowser
         {
             // Cache failures too, so inaccessible folders are retried on refresh, not every frame.
             contents = new Folder([], [], ex.Message);
+            Logger.Write(LogLevel.Error, $"Cannot read asset folder: {path}", ex);
         }
 
         Cache[path] = contents;
@@ -663,6 +669,7 @@ internal sealed class AssetBrowser
                 catch (Exception ex) when (IsSceneFileError(ex))
                 {
                     _sceneError = $"Cannot open scene: {ex.Message}";
+                    Logger.Write(LogLevel.Error, $"Cannot open scene: {file}", ex);
                 }
             }
 

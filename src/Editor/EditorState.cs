@@ -5,6 +5,7 @@ using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;
 using Raylib_cs;
 using AlpacaEngine.Rendering;
+using AlpacaEngine.Logging;
 
 namespace AlpacaEngine.Editor;
 
@@ -59,12 +60,14 @@ public static class EditorState
         // Never overwrite an existing asset, even if it appeared after the dialog opened.
         using var stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write);
         JsonSerializer.Serialize(stream, scene, SceneJsonOptions);
+        Logger.Write(LogLevel.Info, $"Scene created: {path}");
         return path;
     }
 
     public static void OpenScene(string path)
     {
         path = Path.GetFullPath(path);
+        Logger.Write(LogLevel.Debug, $"Opening scene: {path}");
         using var stream = File.OpenRead(path);
         var scene = JsonSerializer.Deserialize<Scene>(stream, SceneJsonOptions)
                     ?? throw new JsonException("The scene file is empty.");
@@ -78,6 +81,7 @@ public static class EditorState
         // Only replace the active scene after the entire file has been loaded successfully.
         CurrentScene = scene;
         CurrentScenePath = path;
+        Logger.Write(LogLevel.Info, $"Scene opened: {path}");
     }
 
     private static bool ValidObjects(List<GameObject> objects) => objects.All(gameObject =>
@@ -91,6 +95,7 @@ public static class EditorState
             WorkingDirectory ?? Directory.GetCurrentDirectory(), CurrentScene.Name + ".scene"));
         File.WriteAllText(path, JsonSerializer.Serialize(CurrentScene, SceneJsonOptions));
         CurrentScenePath = path;
+        Logger.Write(LogLevel.Info, $"Scene saved: {path}");
     }
 
     public static string? WorkingDirectory = Directory.GetCurrentDirectory();
@@ -111,6 +116,7 @@ public static class EditorState
             throw new IOException("An item with this name already exists.");
 
         Directory.CreateDirectory(path);
+        Logger.Write(LogLevel.Info, $"Asset folder created: {path}");
         return path;
     }
 
@@ -123,6 +129,7 @@ public static class EditorState
         {
             // Recursive deletion removes contents too, but does not follow directory junctions.
             Directory.Delete(path, recursive: true);
+            Logger.Write(LogLevel.Info, $"Asset folder deleted: {path}");
         }
         finally
         {
@@ -175,6 +182,7 @@ public static class EditorState
 
         // Reset editing state only after the deletion succeeds.
         File.Delete(path);
+        Logger.Write(LogLevel.Info, $"Asset deleted: {path}");
 
         if (deletingScene) CurrentScene = new Scene();
     }

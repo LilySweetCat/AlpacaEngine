@@ -4,6 +4,7 @@ using AlpacaEngine.GameObjects;
 using AlpacaEngine.Rendering;
 using Raylib_cs;
 using rlImGui_cs;
+using AlpacaEngine.Logging;
 
 namespace AlpacaEngine;
 
@@ -20,8 +21,32 @@ class Program
             EditorState.WorkingDirectory = args[++i];
         }
 
-        StartEditor();
-        return 0;
+        Logger.Initialize(Path.Combine(AppContext.BaseDirectory, "logs"));
+        AppDomain.CurrentDomain.UnhandledException += OnUnhandledException;
+
+        try
+        {
+            Logger.Write(LogLevel.Info, $"Starting editor. Project: {EditorState.WorkingDirectory}");
+            RaylibLogging.Initialize();
+            StartEditor();
+            Logger.Write(LogLevel.Info, "Editor closed.");
+            return 0;
+        }
+        catch (Exception exception)
+        {
+            Logger.Write(LogLevel.Error, "Editor stopped due to an unexpected error.", exception);
+            return 1;
+        }
+        finally
+        {
+            AppDomain.CurrentDomain.UnhandledException -= OnUnhandledException;
+            Logger.Shutdown();
+        }
+    }
+
+    private static void OnUnhandledException(object sender, UnhandledExceptionEventArgs args)
+    {
+        Logger.Write(LogLevel.Error, "Unhandled exception.", args.ExceptionObject as Exception);
     }
 
     private static void StartEditor()

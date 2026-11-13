@@ -1,5 +1,6 @@
 using System.Collections.Frozen;
 using Raylib_cs;
+using AlpacaEngine.Logging;
 
 namespace AlpacaEngine.Managers;
 
@@ -17,20 +18,28 @@ public static class ModelManager
 
     public static string? GetError(string path) => Errors.GetValueOrDefault(path);
 
-    public static void Retry(string path) => Errors.Remove(path);
+    public static void Retry(string path)
+    {
+        Logger.Write(LogLevel.Info, $"User requested model loading retry: {path}");
+        Errors.Remove(path);
+    }
 
     public static bool TryGet(string path, out Model model)
     {
         if (Models.TryGetValue(path, out model)) return true;
 
-        if (Errors.ContainsKey(path) || !Raylib.IsWindowReady()) return false;
+        if (Errors.ContainsKey(path)) return false;
 
         if (!File.Exists(path))
         {
             Errors[path] = "Model file not found: " + path;
+            Logger.Write(LogLevel.Error, Errors[path]);
             return false;
         }
 
+        if (!Raylib.IsWindowReady()) return false;
+
+        Logger.Write(LogLevel.Debug, $"Loading model: {path}");
         model = Raylib.LoadModel(path);
 
         if (!Raylib.IsModelValid(model))
@@ -38,10 +47,12 @@ public static class ModelManager
             Raylib.UnloadModel(model);
             model = default;
             Errors[path] = "Could not load model: " + path;
+            Logger.Write(LogLevel.Error, Errors[path]);
             return false;
         }
 
         Models.Add(path, model);
+        Logger.Write(LogLevel.Info, $"Model loaded: {path}");
         return true;
     }
 

@@ -13,6 +13,12 @@ static void Check(bool condition, string message)
     if (!condition) throw new Exception(message);
 }
 
+if (args.Contains("--logging-only"))
+{
+    LoggingChecks.Run();
+    return;
+}
+
 if (args.Contains("--hierarchy-only"))
 {
     HierarchyChecks.Run();
