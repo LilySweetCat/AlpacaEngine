@@ -25,6 +25,12 @@ if (args.Contains("--hierarchy-only"))
     return;
 }
 
+if (args.Contains("--duplication-only"))
+{
+    DuplicationChecks.Run();
+    return;
+}
+
 if (args.Contains("--lighting-only"))
 {
     LightingChecks.Run();
@@ -591,3 +597,4 @@ finally { Raylib.CloseWindow(); }
 Console.WriteLine("Command history, Inspector and Gizmo checks passed.");
 LightingChecks.Run();
 HierarchyChecks.Run();
+DuplicationChecks.Run();

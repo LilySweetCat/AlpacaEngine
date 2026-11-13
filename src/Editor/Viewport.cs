@@ -6,15 +6,20 @@ namespace AlpacaEngine.Editor;
 
 public static class Viewport
 {
+    internal static bool IsFocused { get; private set; }
+
     public static void Render()
     {
         if (!ImGui.Begin("3D Viewport"))
         {
+            IsFocused = false;
             Gizmo.Cancel();
             EditorState.ViewportHovered = false;
             ImGui.End();
             return;
         }
+
+        IsFocused = ImGui.IsWindowFocused();
 
         ImGui.SetNextItemWidth(180);
         ImGui.Combo("Preview Resolution", ref EditorState.ResScaleIndex, EditorState.ResScaleLabels, EditorState.ResScaleLabels.Length);
@@ -50,14 +55,16 @@ public static class Viewport
         var imageMin = ImGui.GetItemRectMin();
         var imageMax = ImGui.GetItemRectMax();
         var mouse = ImGui.GetMousePos();
-        var gizmoUsed = Gizmo.Draw(EditorState.Selected, EditorState.CurrentCamera, imageMin, imageMax, hovered);
+        // Ctrl-click belongs to selection, even when the cursor is over a gizmo handle.
+        var gizmoUsed = Gizmo.Draw(ImGui.GetIO().KeyCtrl && !Gizmo.IsDragging ? null : EditorState.Selected,
+            EditorState.CurrentCamera, imageMin, imageMax, hovered);
 
         // A plain click (no gizmo, no camera orbit with Alt) picks the object under the cursor.
         if (hovered && !gizmoUsed && ImGui.IsMouseClicked(ImGuiMouseButton.Left)
             && !Raylib.IsKeyDown(KeyboardKey.LeftAlt))
         {
             var ray = Picking.GetMouseRay(mouse, imageMin, imageMax, EditorState.CurrentCamera);
-            EditorState.Selected = Picking.PickAtMouse(ray);
+            EditorState.Select(Picking.PickAtMouse(ray), ImGui.GetIO().KeyCtrl);
         }
 
         HandleDelete();

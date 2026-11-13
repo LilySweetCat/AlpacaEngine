@@ -187,15 +187,74 @@ public static class EditorState
         if (deletingScene) CurrentScene = new Scene();
     }
 
-    public static GameObject? Selected;
+    private static readonly List<GameObject> Selection = [];
+    public static IReadOnlyList<GameObject> SelectedObjects { get; } = Selection.AsReadOnly();
+
+    // The last selected object remains the target of the Inspector and Gizmo.
+    public static GameObject? Selected
+    {
+        get => Selection.LastOrDefault();
+        set => SetSelection(value == null ? [] : [value]);
+    }
+
+    public static bool IsSelected(GameObject gameObject) => Selection.Contains(gameObject);
+
+    public static void Select(GameObject? gameObject, bool toggle = false)
+    {
+        if (!toggle)
+        {
+            Selected = gameObject;
+            return;
+        }
+
+        if (gameObject == null) return;
+
+        var selection = new List<GameObject>(Selection);
+
+        if (!selection.Remove(gameObject)) selection.Add(gameObject);
+
+        SetSelection(selection);
+    }
+
+    internal static void SetSelection(IEnumerable<GameObject> objects)
+    {
+        var selection = objects.Distinct().ToArray();
+
+        if (Selection.SequenceEqual(selection)) return;
+
+        Gizmo.Cancel(true);
+        Inspector.FinishEdit();
+        Selection.Clear();
+        Selection.AddRange(selection);
+    }
 
     public static void ValidateSelection()
     {
-        if (Selected == null || Contains(CurrentScene.GameObjects, Selected)) return;
+        var remaining = Selection.Where(target => Contains(CurrentScene.GameObjects, target)).ToArray();
+
+        if (remaining.Length == Selection.Count) return;
 
         Gizmo.Cancel(true);
         Inspector.FinishEdit(record: false);
-        Selected = null;
+        Selection.Clear();
+        Selection.AddRange(remaining);
+    }
+
+    public static void DuplicateSelection()
+    {
+        if (Selection.Count == 0) return;
+
+        // This includes suns nested anywhere in a selected subtree.
+        if (SceneLighting.GetSuns(Selection).Any())
+        {
+            Logger.Write(LogLevel.Warning, "Cannot duplicate this selection: the scene supports only one sun light.");
+            LogWindow.IsOpen = true;
+            return;
+        }
+
+        Gizmo.Cancel(true);
+        Inspector.FinishEdit();
+        CommandManager.Do(new DuplicateObjectsCommand(CurrentScene, Selection));
     }
 
     internal static bool Contains(List<GameObject> objects, GameObject target)

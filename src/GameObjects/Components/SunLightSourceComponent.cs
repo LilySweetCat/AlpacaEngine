@@ -10,6 +10,13 @@ public class SunLightSourceComponent : IComponent
     public float Intensity = 1f;
     public float Ambient = 0.2f;
 
+    public IComponent Copy() => new SunLightSourceComponent
+    {
+        Color = Color,
+        Intensity = Intensity,
+        Ambient = Ambient
+    };
+
     // Local +Z points along the light rays. Translation and scale do not affect them.
     public static Vector3 GetDirection(GameObject owner) =>
         Vector3.Normalize(Vector3.Transform(Vector3.UnitZ, owner.WorldRotation));

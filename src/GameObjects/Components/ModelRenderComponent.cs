@@ -12,6 +12,8 @@ public class ModelRenderComponent : IComponent
     public string ModelPath = "";
     private readonly AssetBrowser _modelPicker = new(ModelManager.SupportedExtensions);
 
+    public IComponent Copy() => new ModelRenderComponent { ModelPath = ModelPath };
+
     public void DrawOnInspector()
     {
         ImGui.TextUnformatted("Model");

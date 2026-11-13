@@ -9,6 +9,7 @@ namespace AlpacaEngine.Editor;
 public static class Hierarchy
 {
     internal static Texture2D GameObjectIcon;
+    internal static bool IsFocused { get; private set; }
     private static GameObject? _renameTarget;
     private static Scene? _renameScene;
     private static string _renameName = "";
@@ -24,9 +25,12 @@ public static class Hierarchy
     {
         if (!ImGui.Begin("Hierarchy"))
         {
+            IsFocused = false;
             ImGui.End();
             return;
         }
+
+        IsFocused = ImGui.IsWindowFocused();
 
         if (ImGui.BeginPopupContextWindow("ctx_empty", ImGuiPopupFlags.MouseButtonRight | ImGuiPopupFlags.NoOpenOverItems))
         {
@@ -67,13 +71,13 @@ public static class Hierarchy
             var hasChild = gameObject.Child is { Count: > 0 };
             var flags = ImGuiTreeNodeFlags.SpanAvailWidth
                         | (hasChild ? ImGuiTreeNodeFlags.OpenOnArrow : ImGuiTreeNodeFlags.Leaf)
-                        | (gameObject == EditorState.Selected ? ImGuiTreeNodeFlags.Selected : 0);
+                        | (EditorState.IsSelected(gameObject) ? ImGuiTreeNodeFlags.Selected : 0);
 
             // ## hides rest of string from user
             var opened = ImGui.TreeNodeEx($"   {gameObject.Name}###{gameObject.Id}", flags);
 
             if (!ImGui.IsItemToggledOpen() && ImGui.IsItemClicked(ImGuiMouseButton.Left))
-                EditorState.Selected = gameObject;
+                EditorState.Select(gameObject, ImGui.GetIO().KeyCtrl);
 
             var iconMin = ImGui.GetItemRectMin() + new Vector2(
                 ImGui.GetTreeNodeToLabelSpacing(), (ImGui.GetItemRectSize().Y - ImGui.GetFontSize()) * 0.5f);

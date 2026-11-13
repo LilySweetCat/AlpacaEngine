@@ -7,6 +7,8 @@ namespace AlpacaEngine.GameObjects.Components;
 [JsonDerivedType(typeof(SunLightSourceComponent), "sunLight")]
 public interface IComponent
 {
+    // Copy editable settings; runtime resources and editor widgets have their own lifetime.
+    public IComponent Copy();
     public void DrawOnInspector();
     public void Process(GameObject gameObject);
     public void ProcessOnSelected(GameObject gameObject);

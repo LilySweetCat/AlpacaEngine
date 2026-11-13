@@ -27,6 +27,9 @@ public static class Inspector
 
         if (target != null)
         {
+            if (EditorState.SelectedObjects.Count > 1)
+                ImGui.TextWrapped($"{EditorState.SelectedObjects.Count} objects selected. Editing the last selected object.");
+
             ImGui.PushID(target.Id.ToString());
 
             var name = target.Name;

@@ -71,6 +71,9 @@ class Program
 
         rlImGui.Setup(true, enableDocking: true);
 
+        // Keep Ctrl-click available for selection on macOS instead of treating it as a right-click.
+        ImGuiNET.ImGui.GetIO().ConfigMacOSXBehaviors = false;
+
         EditorTheme.Apply(dpiScale);
 
         EditorState.CurrentCamera = new()
@@ -182,7 +185,7 @@ class Program
             {
                 gameObject.Render();
 
-                if (EditorState.Selected == gameObject)
+                if (EditorState.IsSelected(gameObject))
                 {
                     gameObject.RenderOnSelected();
                 }

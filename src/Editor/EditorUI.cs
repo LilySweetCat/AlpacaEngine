@@ -28,14 +28,25 @@ public static class EditorUI
 
         LogWindow.Render();
 
+        HandleShortcuts();
+    }
+
+    internal static void HandleShortcuts()
+    {
         // Active widgets keep their own Undo (notably InputText); do not interrupt a drag.
-        if (!ImGui.IsAnyItemActive() && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
-            && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel)
-            && ImGui.GetIO().KeyCtrl)
+        if (ImGui.IsAnyItemActive() || ImGui.GetIO().WantTextInput || Gizmo.IsDragging
+            || ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel)) return;
+        
+        if (ImGui.GetIO().KeyCtrl)
         {
             if (ImGui.IsKeyPressed(ImGuiKey.Z, false)) CommandManager.Undo();
 
             else if (ImGui.IsKeyPressed(ImGuiKey.Y, false)) CommandManager.Redo();
+        }
+        else if (ImGui.GetIO().KeyShift)
+        {
+            if (ImGui.IsKeyPressed(ImGuiKey.D, false) && (Hierarchy.IsFocused || Viewport.IsFocused))
+                EditorState.DuplicateSelection();
         }
     }
 
@@ -69,6 +80,13 @@ public static class EditorUI
             if (ImGui.MenuItem("Redo", "Ctrl+Y")) CommandManager.Redo();
 
             if (!canRedo) ImGui.EndDisabled();
+
+            var canDuplicate = EditorState.SelectedObjects.Count > 0 && !Gizmo.IsDragging;
+            ImGui.BeginDisabled(!canDuplicate);
+
+            if (ImGui.MenuItem("Duplicate", "Shift+D")) EditorState.DuplicateSelection();
+
+            ImGui.EndDisabled();
 
             ImGui.EndMenu();
         }
