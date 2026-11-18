@@ -38,6 +38,7 @@ public static class Gizmo
     public static bool IntersectPlane(Ray ray, Vector3 point, Vector3 normal, out Vector3 hit)
     {
         hit = default;
+
         var rayFacing = Vector3.Dot(ray.Direction, normal);
 
         if (MathF.Abs(rayFacing) < 0.0001f) return false;
@@ -300,6 +301,8 @@ public static class Gizmo
     // Scale: a drag of half the handle length gives a 1.5x factor; only the chosen component changes.
     private static void HandleScale(GameObject selected, Vector3 hit)
     {
+        // Keep the drag factor above 1% and each scale component above 0.001
+        // so dragging cannot collapse the object to zero or flip its axes.
         var factor = MathF.Max(0.01f, 1 + Vector3.Dot(hit - _startHit, _direction) / _length);
         var scale = _scale;
 
@@ -350,6 +353,7 @@ public static class Gizmo
         for (var i = 0; i < 3; i++)
         {
             var (a, b, c, d) = MovePlaneCorners(frame, i);
+
             var color = (IsDragging ? _axis == i + 3 : hoveredHandle == i + 3)
                 ? 0x9955ffffu : (Colors[i] & 0x00ffffff) | 0x55000000;
             drawList.AddQuadFilled(a, b, c, d, color);
@@ -359,14 +363,18 @@ public static class Gizmo
     // Screen corners of the i-th Move plane quad, shared by its hit test and its drawing.
     private static (Vector2 A, Vector2 B, Vector2 C, Vector2 D) MovePlaneCorners(HandleFrame frame, int i)
     {
+        // The plane handle spans 25–45% of the axis handle length.
+        const float innerOffset = 0.25f;
+        const float outerOffset = 0.45f;
+
         var u = Axis(frame, (i + 1) % 3);
         var v = Axis(frame, (i + 2) % 3);
 
         return (
-            Project(frame, frame.World + frame.Length * (u + v) * 0.25f),
-            Project(frame, frame.World + frame.Length * (u * 0.45f + v * 0.25f)),
-            Project(frame, frame.World + frame.Length * (u + v) * 0.45f),
-            Project(frame, frame.World + frame.Length * (u * 0.25f + v * 0.45f)));
+            Project(frame, frame.World + frame.Length * (u + v) * innerOffset),
+            Project(frame, frame.World + frame.Length * (u * outerOffset + v * innerOffset)),
+            Project(frame, frame.World + frame.Length * (u + v) * outerOffset),
+            Project(frame, frame.World + frame.Length * (u * innerOffset + v * outerOffset)));
     }
 
     private static void DrawMove(HandleFrame frame, int i, uint color)

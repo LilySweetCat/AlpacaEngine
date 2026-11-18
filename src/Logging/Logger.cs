@@ -5,7 +5,7 @@ namespace AlpacaEngine.Logging;
 public static class Logger
 {
     public const int HistoryLimit = 1000;
-    private static readonly object Sync = new();
+    private static readonly Lock Sync = new();
     private static readonly Queue<LogEntry> History = new();
     private static StreamWriter? _writer;
     private static long _nextId;
@@ -23,6 +23,7 @@ public static class Logger
             try
             {
                 Directory.CreateDirectory(directory);
+
                 var path = Path.GetFullPath(Path.Combine(directory,
                     $"alpaca-{DateTime.Now:yyyyMMdd-HHmmss-fff}-{Guid.NewGuid():N}.log"));
                 _writer = new StreamWriter(new FileStream(path, FileMode.CreateNew, FileAccess.Write,

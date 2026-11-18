@@ -2,6 +2,7 @@ using System.Numerics;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
 using Raylib_cs;
+using AlpacaEngine.Rendering;
 
 namespace AlpacaEngine.Editor;
 
@@ -22,6 +23,7 @@ public static class Picking
     public static GameObject? PickAtMouse(Ray ray)
     {
         GameObject? bestGameObject = null;
+
         var bestDist = float.MaxValue;
 
         PickRecursive(EditorState.CurrentScene.GameObjects, ray, ref bestGameObject, ref bestDist);
@@ -38,7 +40,7 @@ public static class Picking
             // The editor sun marker has a fixed world size, independent of scale.
             if (gameObject.Components.Any(component => component is SunLightSourceComponent))
             {
-                var collision = Raylib.GetRayCollisionSphere(ray, gameObject.WorldPosition, 0.2f);
+                var collision = Raylib.GetRayCollisionSphere(ray, gameObject.WorldPosition, SceneLighting.SunMarkerRadius);
 
                 if (collision.Hit && collision.Distance >= 0f) nearestDistance = collision.Distance;
             }
@@ -49,8 +51,10 @@ public static class Picking
                 var localRay = new Ray(Vector3.Transform(ray.Position, inverse), Vector3.Normalize(direction));
 
                 foreach (var component in gameObject.Components)
+                {
                     if (component is ModelRenderComponent renderer && renderer.TryGetModel(out var model))
                         TestBounds(Raylib.GetModelBoundingBox(model));
+                }
 
                 void TestBounds(BoundingBox bounds)
                 {
@@ -71,7 +75,7 @@ public static class Picking
                 bestGameObject = gameObject;
             }
 
-            if (gameObject.Child != null) PickRecursive(gameObject.Child, ray, ref bestGameObject, ref bestDist);
+            if (gameObject.Children != null) PickRecursive(gameObject.Children, ray, ref bestGameObject, ref bestDist);
         }
     }
 }

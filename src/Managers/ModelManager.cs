@@ -59,6 +59,7 @@ public static class ModelManager
     public static void UnloadAll()
     {
         foreach (var model in Models.Values) Raylib.UnloadModel(model);
+
         Models.Clear();
         Errors.Clear();
     }

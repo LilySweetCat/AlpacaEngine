@@ -23,6 +23,7 @@ internal static class LoggingChecks
         {
             Logger.ClearHistory();
             Logger.Initialize(folder);
+
             var file = Logger.FilePath!;
             var missingModel = Path.Combine(folder, "missing.glb");
 
@@ -33,6 +34,7 @@ internal static class LoggingChecks
             Check(Logger.GetEntries().Length == 1, "Frame requests do not repeat the error");
             ModelManager.Retry(missingModel);
             ModelManager.TryGet(missingModel, out _);
+
             var entries = Logger.GetEntries();
             Check(entries.Select(entry => entry.Level).SequenceEqual(
                 new[] { LogLevel.Error, LogLevel.Info, LogLevel.Error }), "Error, retry, error ordering");
@@ -41,6 +43,7 @@ internal static class LoggingChecks
                 && entries[0].Line > 0 && entries[0].File.EndsWith("ModelManager.cs"),
                 "Caller metadata identifies the original call site");
             Check(entries[0].ExceptionDetails == null, "Ordinary errors do not generate stack traces");
+
             var saved = File.ReadAllText(file);
             Check(saved.IndexOf("Model file not found", StringComparison.Ordinal)
                 < saved.IndexOf("User requested", StringComparison.Ordinal), "File preserves event order");
@@ -77,6 +80,7 @@ internal static class LoggingChecks
 
             Logger.Initialize(folder);
             RaylibLogging.Initialize();
+
             var imagePath = Path.Combine(folder, "missing-image.png");
             Raylib.LoadImage(imagePath);
             Check(Logger.GetEntries().Any(entry => entry.Source == "Raylib"

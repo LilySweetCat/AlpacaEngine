@@ -23,6 +23,7 @@ public static class Viewport
 
         ImGui.SetNextItemWidth(180);
         ImGui.Combo("Preview Resolution", ref EditorState.ResScaleIndex, EditorState.ResScaleLabels, EditorState.ResScaleLabels.Length);
+
         var mode = (int)Gizmo.Mode;
         ImGui.SetNextItemWidth(120);
 
@@ -45,6 +46,7 @@ public static class Viewport
         }
 
         rlImGui.ImageRenderTextureFit(EditorState.ViewTexture, false);
+
         var hovered = ImGui.IsItemHovered();
         EditorState.ViewportHovered = hovered;
 
@@ -55,6 +57,7 @@ public static class Viewport
         var imageMin = ImGui.GetItemRectMin();
         var imageMax = ImGui.GetItemRectMax();
         var mouse = ImGui.GetMousePos();
+
         // Ctrl-click belongs to selection, even when the cursor is over a gizmo handle.
         var gizmoUsed = Gizmo.Draw(ImGui.GetIO().KeyCtrl && !Gizmo.IsDragging ? null : EditorState.Selected,
             EditorState.CurrentCamera, imageMin, imageMax, hovered);

@@ -68,6 +68,7 @@ public static class EditorState
     {
         path = Path.GetFullPath(path);
         Logger.Write(LogLevel.Debug, $"Opening scene: {path}");
+
         using var stream = File.OpenRead(path);
         var scene = JsonSerializer.Deserialize<Scene>(stream, SceneJsonOptions)
                     ?? throw new JsonException("The scene file is empty.");
@@ -87,7 +88,7 @@ public static class EditorState
     private static bool ValidObjects(List<GameObject> objects) => objects.All(gameObject =>
         gameObject != null && gameObject.Components != null
         && gameObject.Components.All(component => component != null)
-        && (gameObject.Child == null || ValidObjects(gameObject.Child)));
+        && (gameObject.Children == null || ValidObjects(gameObject.Children)));
 
     public static void SaveScene()
     {
@@ -110,6 +111,7 @@ public static class EditorState
             throw new ArgumentException("Enter a valid folder name without a trailing dot.");
 
         parent = ValidateAssetFolder(parent, allowRoot: true);
+
         var path = Path.Combine(parent, name);
 
         if (Directory.Exists(path) || File.Exists(path))
@@ -123,6 +125,7 @@ public static class EditorState
     public static void DeleteAssetFolder(string path)
     {
         path = ValidateAssetFolder(path, allowRoot: false);
+
         var deletingScene = CurrentScenePath != null && IsPathInside(path, CurrentScenePath);
 
         try
@@ -262,7 +265,7 @@ public static class EditorState
         foreach (var gameObject in objects)
         {
             if (ReferenceEquals(gameObject, target)
-                || (gameObject.Child != null && Contains(gameObject.Child, target))) return true;
+                || (gameObject.Children != null && Contains(gameObject.Children, target))) return true;
         }
 
         return false;
@@ -341,7 +344,8 @@ public static class EditorState
                 CommandManager.Do(new ChangeValueCommand<List<GameObject>>(value =>
                 {
                     if (parent == null) scene.GameObjects = value;
-                    else parent.Child = value;
+                    else parent.Children = value;
+
                     target.Parent = value.Contains(target) ? parent : null;
                     ValidateSelection();
                 }, objects, remaining));
@@ -349,7 +353,9 @@ public static class EditorState
             }
 
             foreach (var gameObject in objects)
-                if (gameObject.Child != null && RemoveFrom(gameObject.Child, gameObject)) return true;
+            {
+                if (gameObject.Children != null && RemoveFrom(gameObject.Children, gameObject)) return true;
+            }
 
             return false;
         }

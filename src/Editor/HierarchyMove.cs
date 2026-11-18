@@ -30,8 +30,8 @@ internal static class HierarchyMove
         }
 
         var oldParent = target.Parent;
-        var source = oldParent == null ? scene.GameObjects : oldParent.Child!;
-        var destination = parent == null ? scene.GameObjects : parent.Child;
+        var source = oldParent == null ? scene.GameObjects : oldParent.Children!;
+        var destination = parent == null ? scene.GameObjects : parent.Children;
         var oldIndex = source.IndexOf(target);
 
         if (oldIndex < 0 || index < 0 || index > (destination?.Count ?? 0))
@@ -72,6 +72,7 @@ internal static class HierarchyMove
             }
 
             rotation = orientation.ToEulerAngles();
+
             var rebuilt = Matrix4x4.CreateScale(scale)
                           * Matrix4x4.CreateFromQuaternion(GameObject.Orientation(rotation))
                           * Matrix4x4.CreateTranslation(position);
@@ -85,6 +86,7 @@ internal static class HierarchyMove
 
         var remaining = new List<GameObject>(source);
         remaining.RemoveAt(oldIndex);
+
         var inserted = sameParent ? remaining : new List<GameObject>(destination ?? []);
         inserted.Insert(newIndex, target);
 
@@ -106,7 +108,7 @@ internal static class HierarchyMove
         {
             if (owner == null) scene.GameObjects = objects!;
 
-            else owner.Child = objects;
+            else owner.Children = objects;
         }
     }
 

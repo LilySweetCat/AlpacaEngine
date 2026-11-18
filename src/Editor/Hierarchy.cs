@@ -43,7 +43,9 @@ public static class Hierarchy
 
         GameObject? deleteTarget = null;
         BeginDragDrop();
+
         var itemSpacing = ImGui.GetStyle().ItemSpacing;
+
         // Contiguous rows make their top/bottom insertion zones reachable without gaps.
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(itemSpacing.X, 0));
         DrawGameObjectTree(EditorState.CurrentScene.GameObjects, ref deleteTarget);
@@ -68,9 +70,9 @@ public static class Hierarchy
     {
         foreach (var gameObject in gameObjects)
         {
-            var hasChild = gameObject.Child is { Count: > 0 };
+            var hasChildren = gameObject.Children is { Count: > 0 };
             var flags = ImGuiTreeNodeFlags.SpanAvailWidth
-                        | (hasChild ? ImGuiTreeNodeFlags.OpenOnArrow : ImGuiTreeNodeFlags.Leaf)
+                        | (hasChildren ? ImGuiTreeNodeFlags.OpenOnArrow : ImGuiTreeNodeFlags.Leaf)
                         | (EditorState.IsSelected(gameObject) ? ImGuiTreeNodeFlags.Selected : 0);
 
             // ## hides rest of string from user
@@ -110,7 +112,7 @@ public static class Hierarchy
 
             if (opened)
             {
-                if (hasChild) DrawGameObjectTree(gameObject.Child!, ref deleteTarget);
+                if (hasChildren) DrawGameObjectTree(gameObject.Children!, ref deleteTarget);
 
                 ImGui.TreePop();
             }
@@ -145,9 +147,11 @@ public static class Hierarchy
             ImGuiInputTextFlags.EnterReturnsTrue | ImGuiInputTextFlags.AutoSelectAll);
         var valid = !string.IsNullOrWhiteSpace(_renameName);
         ImGui.BeginDisabled(!valid);
+
         var accept = ImGui.Button("Rename") || submitted;
         ImGui.EndDisabled();
         ImGui.SameLine();
+
         var cancel = ImGui.Button("Cancel") || ImGui.IsKeyPressed(ImGuiKey.Escape, false);
 
         if ((accept && valid) || cancel)
@@ -189,18 +193,21 @@ public static class Hierarchy
         if (!ImGui.BeginDragDropTarget()) return;
 
         var fraction = (ImGui.GetMousePos().Y - min.Y) / (max.Y - min.Y);
+
+        // The middle 50% reparents into the object; the outer quarters insert above/below.
         var inside = fraction >= 0.25f && fraction <= 0.75f;
         GameObject? parent;
         int index;
+
         var lineY = min.Y;
         var lineX = min.X;
 
         if (inside)
         {
             parent = target;
-            index = target.Child?.Count ?? 0;
+            index = target.Children?.Count ?? 0;
         }
-        else if (fraction > 0.75f && expanded && target.Child is { Count: > 0 })
+        else if (fraction > 0.75f && expanded && target.Children is { Count: > 0 })
         {
             // The next visible row is the first child, so this line uses its indentation.
             parent = target;
@@ -211,7 +218,8 @@ public static class Hierarchy
         else
         {
             parent = target.Parent;
-            var siblings = parent == null ? EditorState.CurrentScene.GameObjects : parent.Child!;
+
+            var siblings = parent == null ? EditorState.CurrentScene.GameObjects : parent.Children!;
             index = siblings.IndexOf(target) + (fraction > 0.75f ? 1 : 0);
             lineY = fraction > 0.75f ? max.Y : min.Y;
         }
@@ -223,6 +231,7 @@ public static class Hierarchy
     private static void DrawRootDropTarget()
     {
         var available = ImGui.GetContentRegionAvail();
+
         // Dummy supplies a drop rectangle without taking clicks from the empty-area context menu.
         ImGui.Dummy(new Vector2(MathF.Max(1, available.X), MathF.Max(24, available.Y)));
 
@@ -252,7 +261,7 @@ public static class Hierarchy
         else drawList.AddLine(new Vector2(lineX, lineY), new Vector2(max.X, lineY), color, 2);
 
         var sourceIndex = _dragSource.Parent == null
-            ? _dragScene.GameObjects.IndexOf(_dragSource) : _dragSource.Parent.Child!.IndexOf(_dragSource);
+            ? _dragScene.GameObjects.IndexOf(_dragSource) : _dragSource.Parent.Children!.IndexOf(_dragSource);
         var insertionIndex = index - (_dragSource.Parent == parent && sourceIndex < index ? 1 : 0);
         ImGui.SetTooltip(valid
             ? $"{_dragSource.Name} -> {parent?.Name ?? "Scene root"} (position {insertionIndex + 1})"

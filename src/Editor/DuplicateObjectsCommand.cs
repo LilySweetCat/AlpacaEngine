@@ -17,6 +17,7 @@ internal sealed class DuplicateObjectsCommand : ICommand
         _scene = scene;
         _originalSelection = selection.Distinct().ToArray();
         _names = AllObjects(scene.GameObjects).Select(target => target.Name).ToHashSet(StringComparer.Ordinal);
+
         var selected = _originalSelection.ToHashSet();
 
         // A selected child is already copied as part of its selected ancestor's tree.
@@ -24,7 +25,7 @@ internal sealed class DuplicateObjectsCommand : ICommand
 
         foreach (var group in roots.GroupBy(target => target.Parent))
         {
-            var before = group.Key == null ? scene.GameObjects : group.Key.Child!;
+            var before = group.Key == null ? scene.GameObjects : group.Key.Children!;
             var after = new List<GameObject>();
             var targets = group.ToHashSet();
 
@@ -65,7 +66,7 @@ internal sealed class DuplicateObjectsCommand : ICommand
             var objects = duplicate ? after : before;
 
             if (parent == null) _scene.GameObjects = objects;
-            else parent.Child = objects;
+            else parent.Children = objects;
 
             foreach (var copy in after.Except(before)) copy.Parent = duplicate ? parent : null;
         }
@@ -83,7 +84,7 @@ internal sealed class DuplicateObjectsCommand : ICommand
         };
         _copies.Add(original, copy);
 
-        if (original.Child != null) copy.Child = original.Child.Select(CopyTree).ToList();
+        if (original.Children != null) copy.Children = original.Children.Select(CopyTree).ToList();
 
         return copy;
     }
@@ -119,9 +120,9 @@ internal sealed class DuplicateObjectsCommand : ICommand
         {
             yield return target;
 
-            if (target.Child == null) continue;
+            if (target.Children == null) continue;
 
-            foreach (var child in AllObjects(target.Child)) yield return child;
+            foreach (var child in AllObjects(target.Children)) yield return child;
         }
     }
 }

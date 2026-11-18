@@ -19,27 +19,29 @@ internal static class DuplicationChecks
     {
         var child = new GameObject { Name = "Door", LocalPosition = Vector3.UnitX,
             Components = [new ModelRenderComponent { ModelPath = "door.glb" }] };
-        var crate = new GameObject { Name = "Crate", Child = [child], LocalPosition = new Vector3(2, 3, 4),
+        var crate = new GameObject { Name = "Crate", Children = [child], LocalPosition = new Vector3(2, 3, 4),
             LocalRotation = new Vector3(10, 20, 30), LocalScale = new Vector3(2, 3, 4),
             Components = [new ModelRenderComponent { ModelPath = "crate.glb" }] };
         var sibling = new GameObject { Name = "Crate_Copy_0" };
-        var parent = new GameObject { Name = "Parent", Child = [crate, sibling], LocalRotation = new Vector3(0, 40, 0) };
+        var parent = new GameObject { Name = "Parent", Children = [crate, sibling], LocalRotation = new Vector3(0, 40, 0) };
         var other = new GameObject { Name = "Other" };
         var scene = new Scene { GameObjects = [parent, other] };
         EditorState.CurrentScene = scene;
         EditorState.Select(crate);
         EditorState.Select(other, true);
         EditorState.Select(child, true);
+
         var oldRootList = scene.GameObjects;
-        var oldChildList = parent.Child;
+        var oldChildList = parent.Children;
         EditorState.DuplicateSelection();
+
         var copies = EditorState.SelectedObjects.ToArray();
         var copy = copies[0];
         var childCopy = copies[2];
         Check(copies.Length == 3 && EditorState.Selected == childCopy, "Copy selection preserves active object order");
         Check(scene.GameObjects.SequenceEqual(new[] { parent, other, copies[1] })
-            && parent.Child!.SequenceEqual(new[] { crate, copy, sibling }), "Copies appear beside originals under each parent");
-        Check(copy.Child!.Single() == childCopy && childCopy.Parent == copy && copy.Parent == parent,
+            && parent.Children!.SequenceEqual(new[] { crate, copy, sibling }), "Copies appear beside originals under each parent");
+        Check(copy.Children!.Single() == childCopy && childCopy.Parent == copy && copy.Parent == parent,
             "Selected descendant is copied only once, with correct parent links");
         Check(copy.Name == "Crate_Copy_1" && childCopy.Name == "Door_Copy_0", "Copy names avoid existing scene names");
         Check(new[] { crate.Id, child.Id, other.Id, copy.Id, childCopy.Id, copies[1].Id }.Distinct().Count() == 6,
@@ -57,11 +59,11 @@ internal static class DuplicationChecks
         Check(oldRootList.SequenceEqual(new[] { parent, other }) && oldChildList!.SequenceEqual(new[] { crate, sibling }),
             "Duplication does not mutate lists retained by earlier history");
         CommandManager.Undo();
-        Check(scene.GameObjects == oldRootList && parent.Child == oldChildList && copy.Parent == null
+        Check(scene.GameObjects == oldRootList && parent.Children == oldChildList && copy.Parent == null
             && childCopy.Parent == copy && EditorState.SelectedObjects.SequenceEqual(new[] { crate, other, child })
             && !CommandManager.CanUndo, "One Undo removes all copies and restores original selection");
         CommandManager.Redo();
-        Check(parent.Child!.Contains(copy) && copy.Parent == parent && EditorState.Selected == childCopy
+        Check(parent.Children!.Contains(copy) && copy.Parent == parent && EditorState.Selected == childCopy
             && ((ModelRenderComponent)copy.Components[0]).ModelPath == "changed.glb", "Redo reuses the same objects and IDs");
 
         EditorState.Select(copy);
@@ -74,6 +76,7 @@ internal static class DuplicationChecks
 
         var folder = Path.Combine(Path.GetTempPath(), "alpaca-duplication-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(folder);
+
         var previousDirectory = EditorState.WorkingDirectory;
 
         try
@@ -81,10 +84,11 @@ internal static class DuplicationChecks
             EditorState.WorkingDirectory = folder;
             EditorState.SaveScene();
             EditorState.OpenScene(EditorState.CurrentScenePath!);
-            var loaded = EditorState.CurrentScene.GameObjects[0].Child!;
+
+            var loaded = EditorState.CurrentScene.GameObjects[0].Children!;
             Check(((ModelRenderComponent)loaded[0].Components[0]).ModelPath == "crate.glb"
                 && ((ModelRenderComponent)loaded[1].Components[0]).ModelPath == "changed.glb"
-                && loaded[1].Child![0].Parent == loaded[1], "Saving and reopening preserves copies, settings and hierarchy");
+                && loaded[1].Children![0].Parent == loaded[1], "Saving and reopening preserves copies, settings and hierarchy");
         }
         finally
         {
@@ -93,13 +97,14 @@ internal static class DuplicationChecks
         }
 
         var sun = new GameObject { Components = [new SunLightSourceComponent()] };
-        parent = new GameObject { Child = [sun] };
+        parent = new GameObject { Children = [sun] };
         EditorState.CurrentScene = new Scene { GameObjects = [parent, other] };
         EditorState.Select(other);
         EditorState.Select(parent, true);
         EditorState.DuplicateSelection();
         Check(!CommandManager.CanUndo && EditorState.CurrentScene.GameObjects.Count == 2,
             "A group containing a nested sun is rejected atomically");
+
         var light = new SunLightSourceComponent { Color = Vector3.UnitX, Intensity = 2, Ambient = 0.4f };
         var lightCopy = (SunLightSourceComponent)light.Copy();
         lightCopy.Intensity = 3;
@@ -116,6 +121,7 @@ internal static class DuplicationChecks
         Check(EditorState.SelectedObjects.Count == 0, "Deleting a selected object removes stale selection");
         EditorState.CurrentScene = new Scene();
         EditorState.AddGameObject();
+
         var added = EditorState.Selected!;
         EditorState.DuplicateSelection();
         CommandManager.Undo();
@@ -142,6 +148,7 @@ internal static class DuplicationChecks
             io.DeltaTime = 1f / 60;
             io.NativePtr->IniFilename = null;
             io.Fonts.GetTexDataAsRGBA32(out nint pixels, out int width, out int height);
+
             var a = new GameObject { Name = "A" };
             var b = new GameObject { Name = "B" };
             EditorState.CurrentScene = new Scene { GameObjects = [a, b] };
@@ -159,6 +166,7 @@ internal static class DuplicationChecks
             }
 
             Frame(Vector2.Zero, false);
+
             var first = new Vector2(80, ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + ImGui.GetTextLineHeight() / 2);
             var second = first + new Vector2(0, ImGui.GetTextLineHeight());
             Frame(first, false);

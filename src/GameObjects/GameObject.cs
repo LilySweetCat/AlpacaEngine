@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Text.Json.Serialization;
 using AlpacaEngine.GameObjects.Components;
 using Raylib_cs;
@@ -17,13 +17,16 @@ public class GameObject
     public List<IComponent> Components = [];
 
     [JsonIgnore] public GameObject? Parent;
-    public List<GameObject>? Child
+
+    public List<GameObject>? Children
     {
         get;
         set
         {
             field = value;
+
             if (value == null) return;
+
             foreach (var child in value) child.Parent = this;
         }
     }
@@ -62,15 +65,17 @@ public class GameObject
     public virtual unsafe void PushTransform()
     {
         Rlgl.PushMatrix();
-        var m = WorldMatrix;
+
+        var worldMatrix = WorldMatrix;
+
         // System.Numerics uses row vectors. These rows are the columns of the
         // equivalent OpenGL matrix; pass them directly, without Raymath conversion.
         float* values = stackalloc float[16]
         {
-            m.M11, m.M12, m.M13, m.M14,
-            m.M21, m.M22, m.M23, m.M24,
-            m.M31, m.M32, m.M33, m.M34,
-            m.M41, m.M42, m.M43, m.M44
+            worldMatrix.M11, worldMatrix.M12, worldMatrix.M13, worldMatrix.M14,
+            worldMatrix.M21, worldMatrix.M22, worldMatrix.M23, worldMatrix.M24,
+            worldMatrix.M31, worldMatrix.M32, worldMatrix.M33, worldMatrix.M34,
+            worldMatrix.M41, worldMatrix.M42, worldMatrix.M43, worldMatrix.M44
         };
         Rlgl.MultMatrixf(values);
     }

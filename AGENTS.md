@@ -19,6 +19,10 @@ Follow the KISS ("Keep It Simple, Stupid"), DRY("Don't Repeat Yourself") and YAG
 Strive to write simple, readable code. Keep in mind that the user might want to modify or improve the code herself later.
 For example:
 - Add empty lines before and after `if` statements;
+- Add empty lines before and after methods/functions;
+- Add empty lines before and after `for` and `foreach` blocks;
+- Separate logical groups of variable declarations with empty lines; keep related `var` declarations together without empty lines between them;
+- Don't forget to add comment if you to add magic number;
 - Break the code into logical blocks using empty lines and separate methods;
 - Name variables and methods so that their names clearly reflect their purpose;
 - Write code comments in English.

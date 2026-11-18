@@ -8,6 +8,7 @@ internal static class EditorTheme
     public static void Apply(float dpiScale)
     {
         ImGui.StyleColorsDark();
+
         var style = ImGui.GetStyle();
 
         style.WindowPadding = new Vector2(4, 4);

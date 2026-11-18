@@ -42,6 +42,7 @@ if (!args.Contains("--editor-only"))
     RunAssetBrowserChecks();
     AssetFolderChecks.Run();
 }
+
 if (args.Contains("--asset-browser-only"))
 {
     Console.WriteLine("Asset browser checks passed.");
@@ -52,7 +53,9 @@ CommandManager.Clear();
 CommandManager.Undo();
 CommandManager.Redo();
 Check(!CommandManager.CanUndo && !CommandManager.CanRedo, "Empty history is safe");
+
 var edited = new GameObject();
+
 var originalName = edited.Name;
 CommandManager.Do(new ChangeValueCommand<string>(value => edited.Name = value, edited.Name, "Renamed"));
 Check(edited.Name == "Renamed" && CommandManager.CanUndo, "Execute change");
@@ -75,8 +78,11 @@ EditorState.CurrentScene = new Scene { GameObjects = [new GameObject()] };
 Check(!CommandManager.CanUndo && !CommandManager.CanRedo && EditorState.Selected == null, "Scene change clears history and selection");
 
 var originalObjects = EditorState.CurrentScene.GameObjects;
+
 var addedChild = new GameObject();
-var addedObject = new GameObject { Child = [addedChild] };
+
+var addedObject = new GameObject { Children = [addedChild] };
+
 var addedObjects = new List<GameObject>(originalObjects) { addedObject };
 CommandManager.Do(new ChangeValueCommand<List<GameObject>>(
     objects => EditorState.CurrentScene.GameObjects = objects, originalObjects, addedObjects));
@@ -100,10 +106,14 @@ Check(EditorState.Selected == originalObjects[0], "Unrelated removal preserves v
 CommandManager.Clear();
 
 var sibling = new GameObject();
+
 var descendant = new GameObject();
-var nested = new GameObject { Child = [descendant] };
+
+var nested = new GameObject { Children = [descendant] };
+
 var originalNestedName = nested.Name;
-var parent = new GameObject { Child = [nested, sibling] };
+
+var parent = new GameObject { Children = [nested, sibling] };
 EditorState.CurrentScene = new Scene { GameObjects = [parent, new GameObject()] };
 EditorState.RenameGameObject(nested, "  Nested renamed  ");
 Check(nested.Name == "Nested renamed", "Hierarchy rename trims the name");
@@ -117,15 +127,15 @@ Check(nested.Name == "Nested renamed", "Redo hierarchy rename");
 CommandManager.Clear();
 EditorState.Selected = descendant;
 EditorState.DeleteGameObject(nested);
-Check(parent.Child!.SequenceEqual(new[] { sibling }) && nested.Parent == null,
+Check(parent.Children!.SequenceEqual(new[] { sibling }) && nested.Parent == null,
     "Delete nested object from its owning list");
-Check(EditorState.Selected == null && nested.Child![0] == descendant && descendant.Parent == nested,
+Check(EditorState.Selected == null && nested.Children![0] == descendant && descendant.Parent == nested,
     "Delete subtree clears descendant selection and keeps subtree intact");
 CommandManager.Undo();
-Check(parent.Child!.SequenceEqual(new[] { nested, sibling }) && nested.Parent == parent,
+Check(parent.Children!.SequenceEqual(new[] { nested, sibling }) && nested.Parent == parent,
     "Undo deletion restores order and parent");
 CommandManager.Redo();
-Check(parent.Child!.SequenceEqual(new[] { sibling }) && nested.Parent == null,
+Check(parent.Children!.SequenceEqual(new[] { sibling }) && nested.Parent == null,
     "Redo nested deletion");
 CommandManager.Undo();
 EditorState.Selected = sibling;
@@ -136,7 +146,7 @@ EditorState.DeleteGameObject(parent);
 Check(EditorState.CurrentScene.GameObjects.Count == 1 && EditorState.Selected == null,
     "Root deletion clears selected descendant");
 CommandManager.Undo();
-Check(EditorState.CurrentScene.GameObjects[0] == parent && parent.Child![0] == nested,
+Check(EditorState.CurrentScene.GameObjects[0] == parent && parent.Children![0] == nested,
     "Undo root deletion restores subtree and order");
 CommandManager.Clear();
 EditorState.DeleteGameObject(new GameObject());
@@ -144,6 +154,7 @@ EditorState.RenameGameObject(new GameObject(), "Not in scene");
 Check(!CommandManager.CanUndo, "Objects outside the scene do not create history");
 
 EditorState.AddGameObject();
+
 var emptyObject = EditorState.Selected!;
 Check(emptyObject.GetType() == typeof(GameObject) && emptyObject.Components.Count == 0,
     "Add creates and selects a plain empty GameObject");
@@ -152,6 +163,7 @@ EditorState.ValidateSelection();
 Check(!EditorState.CurrentScene.GameObjects.Contains(emptyObject) && EditorState.Selected == null,
     "Undo empty object creation");
 CommandManager.Redo();
+
 var modelRenderer = new ModelRenderComponent();
 EditorState.AddComponent(emptyObject, modelRenderer);
 Check(emptyObject.Components.Single() == modelRenderer, "Add model renderer component");
@@ -165,9 +177,12 @@ CommandManager.Clear();
 
 var transformParent = new GameObject { LocalPosition = new Vector3(3, 4, 5),
     LocalRotation = new Vector3(15, 40, 10) };
+
 var transformChild = new GameObject { LocalPosition = Vector3.UnitX,
     LocalRotation = new Vector3(25, 5, 60), Parent = transformParent };
+
 var matrixDirection = Vector3.TransformNormal(Vector3.UnitZ, transformChild.WorldMatrix);
+
 var quaternionDirection = Vector3.Transform(Vector3.UnitZ, transformChild.WorldRotation);
 Check(Vector3.Distance(matrixDirection, quaternionDirection) < 0.0001f,
     "World quaternion agrees with hierarchical matrix rotation");
@@ -215,7 +230,9 @@ finally
 {
     if (Directory.Exists(Path.Combine(nestedAssets, "Cycle")))
         Directory.Delete(Path.Combine(nestedAssets, "Cycle"));
+
     foreach (var file in Directory.GetFiles(nestedAssets)) File.Delete(file);
+
     Directory.Delete(nestedAssets);
     Directory.Delete(assetFolder);
 }
@@ -230,24 +247,28 @@ try
     EditorState.OpenScene(scenePath);
     Check(EditorState.CurrentScene.Name == "Test Scene" && EditorState.CurrentScene.GameObjects.Count == 0,
         "New scene is empty and has the requested name");
+
     var savedChild = new GameObject { Name = "Child", LocalPosition = new Vector3(1, 2, 3) };
-    var savedParent = new GameObject { Name = "Parent", LocalScale = new Vector3(2, 3, 4), Child = [savedChild] };
+    var savedParent = new GameObject { Name = "Parent", LocalScale = new Vector3(2, 3, 4), Children = [savedChild] };
     EditorState.CurrentScene.GameObjects.Add(savedParent);
     EditorState.SaveScene();
     EditorState.Selected = savedChild;
     EditorState.RenameGameObject(savedParent, "Unsaved rename");
     EditorState.OpenScene(scenePath);
+
     var loadedParent = EditorState.CurrentScene.GameObjects.Single();
     Check(loadedParent.GetType() == typeof(GameObject) && loadedParent.Name == "Parent" && loadedParent.Id == savedParent.Id
         && loadedParent.LocalScale == savedParent.LocalScale, "Scene round trip preserves type, identity and fields");
-    Check(loadedParent.Child!.Single().Parent == loadedParent
-        && loadedParent.Child[0].LocalPosition == savedChild.LocalPosition, "Scene round trip restores hierarchy and transforms");
+    Check(loadedParent.Children!.Single().Parent == loadedParent
+        && loadedParent.Children[0].LocalPosition == savedChild.LocalPosition, "Scene round trip restores hierarchy and transforms");
     Check(EditorState.Selected == null && !CommandManager.CanUndo && !CommandManager.CanRedo,
         "Opening a scene clears selection and history");
+
     var componentObject = new GameObject { Components = [new ModelRenderComponent { ModelPath = "assets/test.glb" }] };
     EditorState.CurrentScene.GameObjects.Add(componentObject);
     EditorState.SaveScene();
     EditorState.OpenScene(scenePath);
+
     var loadedObject = EditorState.CurrentScene.GameObjects[1];
     Check(loadedObject.GetType() == typeof(GameObject)
         && loadedObject.Components.Single() is ModelRenderComponent { ModelPath: "assets/test.glb" },
@@ -256,6 +277,7 @@ try
     catch (IOException) { }
     try { EditorState.CreateScene(sceneFolder, "../Outside"); throw new Exception("Invalid name accepted"); }
     catch (ArgumentException) { }
+
     var activeScene = EditorState.CurrentScene;
     var brokenPath = Path.Combine(sceneFolder, "Broken.scene");
     File.WriteAllText(brokenPath, "not json");
@@ -265,12 +287,13 @@ try
         "Failed open preserves the active scene and its save path");
     EditorState.Selected = loadedObject;
     EditorState.RenameGameObject(loadedObject, "Keep selection and history");
+
     foreach (var invalidObject in new[]
              {
                  "{\"Components\":null}",
                  "{\"Components\":[null]}",
-                 "{\"Child\":[{\"Components\":null}]}",
-                 "{\"Child\":[{\"Components\":[null]}]}"
+                 "{\"Children\":[{\"Components\":null}]}",
+                 "{\"Children\":[{\"Components\":[null]}]}"
              })
     {
         File.WriteAllText(brokenPath, "{\"GameObjects\":[" + invalidObject + "]}");
@@ -280,10 +303,12 @@ try
             && EditorState.Selected == loadedObject && CommandManager.CanUndo,
             "Invalid components preserve the active scene, save path, selection and history");
     }
+
     EditorState.CurrentScene.Name = "Changed display name";
     EditorState.SaveScene();
     EditorState.OpenScene(scenePath);
     Check(EditorState.CurrentScene.Name == "Changed display name", "Save updates the opened asset path");
+
     var sceneBeforeDelete = EditorState.CurrentScene;
     EditorState.Selected = EditorState.CurrentScene.GameObjects[0];
     EditorState.RenameGameObject(EditorState.Selected, "Before deletion");
@@ -294,11 +319,13 @@ try
         "Deleting the edited scene resets to the default scene and normalizes paths");
     Check(EditorState.Selected == null && !CommandManager.CanUndo && !CommandManager.CanRedo,
         "Deleting the edited scene clears selection and history");
+
     var defaultScene = EditorState.CurrentScene;
     var disposablePath = EditorState.CreateScene(sceneFolder, "Disposable");
     EditorState.DeleteAsset(disposablePath);
     Check(!File.Exists(disposablePath) && EditorState.CurrentScene == defaultScene,
         "Deleting an inactive scene preserves the current scene");
+
     var imagePath = Path.Combine(sceneFolder, "Image.png");
     File.WriteAllText(imagePath, "test asset");
     EditorState.DeleteAsset(imagePath);
@@ -310,6 +337,7 @@ try
 finally
 {
     foreach (var file in Directory.GetFiles(sceneFolder)) File.Delete(file);
+
     Directory.Delete(sceneFolder);
 }
 
@@ -324,6 +352,7 @@ Check(MathF.Abs(Gizmo.SignedAngle(Vector3.UnitX, Vector3.UnitY, Vector3.UnitZ) -
     "Signed rotation angle");
 Check(MathF.Abs(Gizmo.SegmentDistance(new Vector2(5, 3), Vector2.Zero, new Vector2(10, 0)) - 3) < 0.0001f,
     "Screen-space handle hit testing");
+
 foreach (var degrees in new[] { new Vector3(20, 40, 60), new Vector3(-70, 130, -45),
              new Vector3(90, 30, 20), new Vector3(-90, 30, 20), new Vector3(120, -150, 175) })
 {
@@ -331,6 +360,7 @@ foreach (var degrees in new[] { new Vector3(20, 40, 60), new Vector3(-70, 130, -
     var roundTrip = GameObject.Orientation(rotation.ToEulerAngles());
     Check(MathF.Abs(Quaternion.Dot(rotation, roundTrip)) > 0.99999f, "Euler/quaternion round trip: " + degrees);
 }
+
 Raylib.SetConfigFlags(ConfigFlags.HiddenWindow);
 Raylib.InitWindow(640, 480, "Gizmo checks");
 try
@@ -342,6 +372,7 @@ try
     {
         var modelPath = Path.Combine(modelFolder, "Box.obj");
         File.WriteAllText(modelPath, "v -0.5 -0.5 -0.5\nv 0.5 -0.5 -0.5\nv 0.5 0.5 -0.5\nv -0.5 0.5 -0.5\nv -0.5 -0.5 0.5\nv 0.5 -0.5 0.5\nv 0.5 0.5 0.5\nv -0.5 0.5 0.5\nf 1 2 3\nf 1 3 4\nf 5 7 6\nf 5 8 7\n");
+
         var modelObject = new GameObject
         {
             LocalPosition = new Vector3(2, 1, 0), LocalScale = new Vector3(2, 4, 6),
@@ -359,23 +390,29 @@ try
     finally
     {
         ModelManager.UnloadAll();
+
         foreach (var file in Directory.GetFiles(modelFolder)) File.Delete(file);
+
         Directory.Delete(modelFolder);
     }
 
     Rlgl.MatrixMode(MatrixMode.ModelView);
     transformParent.LocalScale = new Vector3(2, 3, 4);
     transformChild.PushTransform();
+
     var nativeMatrix = Rlgl.GetMatrixTransform();
     transformChild.PopTransform();
+
     var nativePoint = Raymath.Vector3Transform(Vector3.One, nativeMatrix);
     var expectedPoint = Vector3.Transform(Vector3.One, transformChild.WorldMatrix);
     Check(Vector3.Distance(nativePoint, expectedPoint) < 0.0001f,
         "OpenGL matrix matches System.Numerics including translation and parent shear");
+
     foreach (var projection in new[] { CameraProjection.Perspective, CameraProjection.Orthographic })
     {
         var camera = new Camera3D { Position = new Vector3(0, 0, 10), Target = Vector3.Zero,
             Up = Vector3.UnitY, FovY = projection == CameraProjection.Perspective ? 60 : 10, Projection = projection };
+
         foreach (var size in new[] { new Vector2(800, 600), new Vector2(400, 300) })
         {
             var world = new Vector3(1, 2, 0);
@@ -385,6 +422,7 @@ try
                 && Vector3.Distance(hit, world) < 0.001f, "Projection/ray round trip: " + projection);
         }
     }
+
     var context = ImGui.CreateContext();
     try
     {
@@ -393,8 +431,9 @@ try
         io.DeltaTime = 1f / 60;
         unsafe { io.NativePtr->IniFilename = null; }
         io.Fonts.GetTexDataAsRGBA32(out IntPtr pixels, out int width, out int height);
+
         var deleteChild = new GameObject();
-        var deleteTarget = new GameObject { Child = [deleteChild] };
+        var deleteTarget = new GameObject { Children = [deleteChild] };
         EditorState.CurrentScene = new Scene { GameObjects = [deleteTarget] };
         EditorState.Selected = deleteTarget;
 
@@ -442,7 +481,7 @@ try
         Check(EditorState.CurrentScene.GameObjects.Count == 0 && EditorState.Selected == null,
             "Viewport Delete removes selection and subtree");
         CommandManager.Undo();
-        Check(EditorState.CurrentScene.GameObjects.Single() == deleteTarget && deleteTarget.Child![0] == deleteChild,
+        Check(EditorState.CurrentScene.GameObjects.Single() == deleteTarget && deleteTarget.Children![0] == deleteChild,
             "Undo viewport Delete restores the subtree");
         EditorState.Selected = deleteTarget;
         DeleteFrame(true);
@@ -458,6 +497,7 @@ try
         var inspectorTarget = new GameObject();
         var originalInspectorName = inspectorTarget.Name;
         EditorState.Selected = inspectorTarget;
+
         void InspectorFrame(Vector2 mouse, bool down, string text = null)
         {
             io.AddMousePosEvent(mouse.X, mouse.Y);
@@ -471,7 +511,9 @@ try
             Inspector.Render();
             ImGui.Render();
         }
+
         InspectorFrame(Vector2.Zero, false);
+
         var fieldY = ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + ImGui.GetFrameHeight() / 2;
         var nameMouse = new Vector2(80, fieldY);
         InspectorFrame(nameMouse, true);
@@ -479,6 +521,7 @@ try
         InspectorFrame(nameMouse, false, "test");
         Check(inspectorTarget.Name != originalInspectorName && !CommandManager.CanUndo,
             "Inspector text preview stays out of history");
+
         var renamed = inspectorTarget.Name;
         var emptyMouse = new Vector2(500, 300);
         InspectorFrame(emptyMouse, true);
@@ -489,6 +532,7 @@ try
         CommandManager.Redo();
         Check(inspectorTarget.Name == renamed, "Redo Inspector name");
         CommandManager.Clear();
+
         var positionMouse = nameMouse + new Vector2(0, ImGui.GetFrameHeightWithSpacing());
         InspectorFrame(positionMouse, true);
         InspectorFrame(positionMouse + new Vector2(20, 0), true);
@@ -496,6 +540,7 @@ try
         Check(inspectorTarget.LocalPosition != Vector3.Zero && !CommandManager.CanUndo,
             "Inspector position previews while dragging");
         InspectorFrame(positionMouse + new Vector2(40, 0), false);
+
         var inspectorPosition = inspectorTarget.LocalPosition;
         CommandManager.Undo();
         Check(inspectorTarget.LocalPosition == Vector3.Zero && !CommandManager.CanUndo,
@@ -508,12 +553,14 @@ try
         var inspectorLight = (SunLightSourceComponent)inspectorSun.Components[0];
         EditorState.Selected = inspectorSun;
         InspectorFrame(Vector2.Zero, false);
+
         var intensityMouse = nameMouse + new Vector2(0, 6 * ImGui.GetFrameHeightWithSpacing());
         InspectorFrame(intensityMouse, true);
         InspectorFrame(intensityMouse + new Vector2(40, 0), true);
         Check(inspectorLight.Intensity != 1f && !CommandManager.CanUndo,
             "Sun intensity previews while dragging in the Inspector");
         InspectorFrame(intensityMouse + new Vector2(40, 0), false);
+
         var editedIntensity = inspectorLight.Intensity;
         CommandManager.Undo();
         Check(inspectorLight.Intensity == 1f && !CommandManager.CanUndo,
@@ -528,6 +575,7 @@ try
         EditorState.ViewTexture = new RenderTexture2D { Texture = new Texture2D { Width = 640, Height = 480 } };
         Gizmo.Mode = Gizmo.Operation.Move;
         Gizmo.Local = false;
+
         bool Frame(Vector2 mouse, bool down)
         {
             io.AddMousePosEvent(mouse.X, mouse.Y);
@@ -536,18 +584,21 @@ try
             ImGui.SetNextWindowPos(Vector2.Zero);
             ImGui.SetNextWindowSize(io.DisplaySize);
             ImGui.Begin("Gizmo test", ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize);
+
             var consumed = Gizmo.Draw(target, camera, Vector2.Zero, io.DisplaySize, true);
             ImGui.End();
             ImGui.Render();
             Check(ImGui.GetDrawData().TotalVtxCount > 0, "Gizmo overlay emits draw commands");
             return consumed;
         }
+
         Frame(new Vector2(390, 240), false);
         Check(Frame(new Vector2(390, 240), true) && Gizmo.IsDragging, "Axis click captures drag");
         Check(Frame(new Vector2(410, 240), true) && target.LocalPosition.X > 0.4f
             && MathF.Abs(target.LocalPosition.Y) < 0.0001f, "Drag moves only selected axis");
         Check(!CommandManager.CanUndo, "Drag preview does not enter history");
         Check(Frame(new Vector2(410, 240), false) && !Gizmo.IsDragging, "Release ends drag and consumes click");
+
         var moved = target.LocalPosition;
         CommandManager.Undo();
         Check(target.LocalPosition == Vector3.Zero && !CommandManager.CanUndo, "Whole drag is one Undo");
@@ -561,6 +612,7 @@ try
         Frame(new Vector2(410, 240), true);
         Check(target.LocalScale.X > 1.1f && target.LocalScale.Y == 1 && target.LocalScale.Z == 1, "Scale only selected local component");
         Frame(new Vector2(410, 240), false);
+
         var scaled = target.LocalScale;
         CommandManager.Undo();
         Check(target.LocalScale == Vector3.One, "Undo scale drag");
@@ -580,6 +632,7 @@ try
         Frame(new Vector2(380, 180), true);
         Frame(new Vector2(260, 180), true);
         Frame(new Vector2(260, 180), false);
+
         var rotated = target.LocalRotation;
         CommandManager.Undo();
         Check(target.LocalRotation == Vector3.Zero, "Undo rotation drag");

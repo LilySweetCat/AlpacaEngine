@@ -42,6 +42,7 @@ internal sealed class AssetBrowser
         try
         {
             DrawContents();
+
             var canSelect = _selectedFile != null && File.Exists(_selectedFile)
                 && _extensions != null && _extensions.Contains(Path.GetExtension(_selectedFile));
             ImGui.BeginDisabled(!canSelect);
@@ -551,6 +552,7 @@ internal sealed class AssetBrowser
 
         // Full paths distinguish identically named folders; draw the icon and label manually.
         ImGui.PushID(folder.Path);
+
         var open = ImGui.TreeNodeEx("##folder", flags);
 
         // Clicking the arrow only expands/collapses; clicking the label selects the folder.
@@ -616,6 +618,7 @@ internal sealed class AssetBrowser
 
         // The walk goes through the folder cache, so it costs no disk access after the first read.
         string? searchWarning = null;
+
         var files = searching
             ? Search(_root!, _search.Trim(), _extensions, out searchWarning)
             : contents.Files.Where(file => MatchesExtension(file, _extensions)).ToArray();
@@ -634,6 +637,7 @@ internal sealed class AssetBrowser
 
         // Choose a column count from the available width, then stretch tiles to fill each row.
         const float tileWidth = 112;
+
         var spacing = ImGui.GetStyle().ItemSpacing;
         var available = ImGui.GetContentRegionAvail().X;
         var columns = Math.Clamp((int)((available + spacing.X) / (tileWidth + spacing.X)), 1, 64);
@@ -647,6 +651,7 @@ internal sealed class AssetBrowser
             if (i % columns != 0) ImGui.SameLine();
 
             ImGui.PushID(file);
+
             var selected = EditorState.PathComparer.Equals(file, _selectedFile);
 
             // A temporary button color highlights the selected file without affecting other tiles.
@@ -706,7 +711,9 @@ internal sealed class AssetBrowser
                 && Path.GetRelativePath(root, file).Contains(query, StringComparison.OrdinalIgnoreCase)));
 
             foreach (var child in contents.Folders)
+            {
                 if (!child.IsLink) pending.Push(child.Path);
+            }
         }
 
         return results.OrderBy(file => file, StringComparer.OrdinalIgnoreCase).ToArray();
@@ -720,6 +727,7 @@ internal sealed class AssetBrowser
         var max = ImGui.GetItemRectMax();
         var drawList = ImGui.GetWindowDrawList();
         drawList.PushClipRect(min + new Vector2(4), max - new Vector2(4), true);
+
         var textColor = ImGui.GetColorU32(ImGuiCol.Text);
         var icon = Path.GetExtension(file).ToLowerInvariant() switch
         {

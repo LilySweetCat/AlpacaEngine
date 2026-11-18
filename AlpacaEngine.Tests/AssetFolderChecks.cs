@@ -35,6 +35,7 @@ internal static class AssetFolderChecks
         try
         {
             EditorState.WorkingDirectory = root;
+
             var folder = EditorState.CreateAssetFolder(root, "  Новая папка  ");
             Check(Directory.Exists(folder) && Path.GetFileName(folder) == "Новая папка",
                 "Create a folder with a trimmed Unicode name");
@@ -52,6 +53,7 @@ internal static class AssetFolderChecks
 
             var nested = EditorState.CreateAssetFolder(folder, "Nested");
             File.WriteAllText(Path.Combine(nested, "unsupported.txt"), "contents");
+
             var scene = EditorState.CreateScene(nested, "Active");
             EditorState.OpenScene(scene);
             EditorState.DeleteAssetFolder(folder);
@@ -73,6 +75,7 @@ internal static class AssetFolderChecks
                 Directory.CreateSymbolicLink(link, outside);
                 Reject(() => EditorState.CreateAssetFolder(link, "Escape"));
                 Reject(() => EditorState.DeleteAssetFolder(link));
+
                 var container = EditorState.CreateAssetFolder(root, "Container");
                 Directory.CreateSymbolicLink(Path.Combine(container, "Link"), outside);
                 File.WriteAllText(Path.Combine(outside, "Keep.txt"), "keep");

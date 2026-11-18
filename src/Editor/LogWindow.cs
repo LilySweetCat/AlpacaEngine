@@ -53,6 +53,7 @@ public static class LogWindow
 
                 ImGui.PushID(entry.Id.ToString());
                 ImGui.PushStyleColor(ImGuiCol.Text, GetColor(entry.Level));
+
                 // Keep messages out of widget labels: native messages can contain ImGui's ## markers.
                 var expanded = ImGui.TreeNodeEx("##entry", ImGuiTreeNodeFlags.SpanAvailWidth);
                 ImGui.SameLine();

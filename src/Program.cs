@@ -109,6 +109,8 @@ class Program
                 _ => Raylib.GetWindowScaleDPI().X, // HiDPI native
             };
 
+            // Limit preview texture dimensions to 64–4096 pixels to avoid tiny targets
+            // and bound GPU memory use when resizing or using a high DPI scale.
             var targetW = Math.Clamp((int)(EditorState.PendingSize.X * resScale), 64, 4096);
             var targetH = Math.Clamp((int)(EditorState.PendingSize.Y * resScale), 64, 4096);
 
@@ -196,7 +198,7 @@ class Program
             }
 
             // Each WorldMatrix already includes its parents; do not nest transforms.
-            if (gameObject.Child != null) RenderGameObjects(gameObject.Child);
+            if (gameObject.Children != null) RenderGameObjects(gameObject.Children);
         }
     }
 }

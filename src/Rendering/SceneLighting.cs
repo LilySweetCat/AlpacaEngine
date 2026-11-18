@@ -8,6 +8,9 @@ namespace AlpacaEngine.Rendering;
 // Owns the shared shader and cube mesh; components only serialize light settings.
 public static class SceneLighting
 {
+    // World-space radius shared by the visible sun marker and its picking sphere.
+    internal const float SunMarkerRadius = 0.2f;
+
     private static Shader _shader;
     private static Model _cube;
     private static bool _initialized;
@@ -25,9 +28,9 @@ public static class SceneLighting
             foreach (var light in owner.Components.OfType<SunLightSourceComponent>())
                 yield return (owner, light);
 
-            if (owner.Child == null) continue;
+            if (owner.Children == null) continue;
 
-            foreach (var sun in GetSuns(owner.Child)) yield return sun;
+            foreach (var sun in GetSuns(owner.Children)) yield return sun;
         }
     }
 
@@ -130,7 +133,8 @@ public static class SceneLighting
             var position = owner.WorldPosition;
             var direction = SunLightSourceComponent.GetDirection(owner);
             var color = owner == selected ? Color.Yellow : Color.Orange;
-            Raylib.DrawSphereWires(position, 0.2f, 8, 12, color);
+            Raylib.DrawSphereWires(position, SunMarkerRadius, 8, 12, color);
+
             var tip = position + direction;
             var side = Vector3.Normalize(Vector3.Cross(direction,
                 MathF.Abs(direction.Y) < 0.9f ? Vector3.UnitY : Vector3.UnitX)) * 0.15f;
