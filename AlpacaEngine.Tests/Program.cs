@@ -1,5 +1,6 @@
 using System.Numerics;
 using AlpacaEngine;
+using AlpacaEngine.Commands;
 using AlpacaEngine.Editor;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
@@ -247,16 +248,19 @@ try
     EditorState.OpenScene(scenePath);
     Check(EditorState.CurrentScene.Name == "Test Scene" && EditorState.CurrentScene.GameObjects.Count == 0,
         "New scene is empty and has the requested name");
+    Check(EditorState.CurrentScene.BackgroundColor == Vector3.Zero, "New scene has a black background");
 
     var savedChild = new GameObject { Name = "Child", LocalPosition = new Vector3(1, 2, 3) };
     var savedParent = new GameObject { Name = "Parent", LocalScale = new Vector3(2, 3, 4), Children = [savedChild] };
     EditorState.CurrentScene.GameObjects.Add(savedParent);
+    EditorState.CurrentScene.BackgroundColor = new Vector3(1, 1, 0);
     EditorState.SaveScene();
     EditorState.Selected = savedChild;
     EditorState.RenameGameObject(savedParent, "Unsaved rename");
     EditorState.OpenScene(scenePath);
 
     var loadedParent = EditorState.CurrentScene.GameObjects.Single();
+    Check(EditorState.CurrentScene.BackgroundColor == new Vector3(1, 1, 0), "Scene background survives save and load");
     Check(loadedParent.GetType() == typeof(GameObject) && loadedParent.Name == "Parent" && loadedParent.Id == savedParent.Id
         && loadedParent.LocalScale == savedParent.LocalScale, "Scene round trip preserves type, identity and fields");
     Check(loadedParent.Children!.Single().Parent == loadedParent
@@ -605,6 +609,38 @@ try
         CommandManager.Redo();
         Check(target.LocalPosition == moved, "Redo restores drag result");
         CommandManager.Clear();
+        target.LocalPosition = Vector3.Zero;
+
+        var groupParent = new GameObject { LocalRotation = new Vector3(0, 0, 90) };
+        var groupChild = new GameObject { LocalPosition = Vector3.UnitX, Parent = groupParent };
+        var groupMember = new GameObject { LocalPosition = Vector3.UnitY, Parent = groupParent };
+        EditorState.CurrentScene = new Scene { GameObjects = [target, groupParent] };
+        groupParent.Children = [groupChild, groupMember];
+        EditorState.Select(groupParent);
+        EditorState.Select(groupChild, true);
+        EditorState.Select(target, true);
+
+        var originalParent = groupParent.WorldPosition;
+        var originalChild = groupChild.WorldPosition;
+        var originalMember = groupMember.WorldPosition;
+        Frame(new Vector2(390, 240), false);
+        Frame(new Vector2(390, 240), true);
+        Frame(new Vector2(410, 240), true);
+        Frame(new Vector2(410, 240), false);
+
+        var groupOffset = target.WorldPosition;
+        Check(groupOffset.X > 0.4f && Vector3.Distance(groupParent.WorldPosition, originalParent + groupOffset) < 0.0001f
+            && Vector3.Distance(groupChild.WorldPosition, originalChild + groupOffset) < 0.0001f
+            && Vector3.Distance(groupMember.WorldPosition, originalMember + groupOffset) < 0.0001f,
+            "Group move applies one world offset without moving selected descendants twice");
+        CommandManager.Undo();
+        Check(target.LocalPosition == Vector3.Zero && groupParent.WorldPosition == originalParent
+            && groupChild.LocalPosition == Vector3.UnitX, "One Undo restores group move");
+        CommandManager.Redo();
+        Check(Vector3.Distance(groupChild.WorldPosition, originalChild + groupOffset) < 0.0001f,
+            "Redo restores group move");
+        CommandManager.Clear();
+        EditorState.Selected = target;
         target.LocalPosition = Vector3.Zero;
         Gizmo.Mode = Gizmo.Operation.Scale;
         Frame(new Vector2(390, 240), false);

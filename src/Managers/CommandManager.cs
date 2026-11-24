@@ -1,18 +1,6 @@
+using AlpacaEngine.Commands;
+
 namespace AlpacaEngine.Managers;
-
-public interface ICommand
-{
-    public void Do();
-
-    public void Undo();
-}
-
-public sealed class ChangeValueCommand<T>(Action<T> setValue, T oldValue, T newValue) : ICommand
-{
-    public void Do() => setValue(newValue);
-
-    public void Undo() => setValue(oldValue);
-}
 
 public static class CommandManager
 {

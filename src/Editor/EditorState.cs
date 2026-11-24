@@ -1,5 +1,6 @@
 using System.Numerics;
 using System.Text.Json;
+using AlpacaEngine.Commands;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;
@@ -190,17 +191,27 @@ public static class EditorState
         if (deletingScene) CurrentScene = new Scene();
     }
 
-    private static readonly List<GameObject> Selection = [];
-    public static IReadOnlyList<GameObject> SelectedObjects { get; } = Selection.AsReadOnly();
+    public static Selection? CurrentSelection { get; private set; }
+    public static IReadOnlyList<GameObject> SelectedObjects =>
+        (CurrentSelection as GameObjectSelection)?.Objects ?? Array.Empty<GameObject>();
 
     // The last selected object remains the target of the Inspector and Gizmo.
     public static GameObject? Selected
     {
-        get => Selection.LastOrDefault();
+        get => SelectedObjects.LastOrDefault();
         set => SetSelection(value == null ? [] : [value]);
     }
 
-    public static bool IsSelected(GameObject gameObject) => Selection.Contains(gameObject);
+    public static bool IsSelected(GameObject gameObject) => SelectedObjects.Contains(gameObject);
+
+    public static void SelectSceneSettings()
+    {
+        if (CurrentSelection is SceneSettingsSelection) return;
+
+        Gizmo.Cancel(true);
+        Inspector.FinishEdit();
+        CurrentSelection = new SceneSettingsSelection();
+    }
 
     public static void Select(GameObject? gameObject, bool toggle = false)
     {
@@ -212,7 +223,7 @@ public static class EditorState
 
         if (gameObject == null) return;
 
-        var selection = new List<GameObject>(Selection);
+        var selection = new List<GameObject>(SelectedObjects);
 
         if (!selection.Remove(gameObject)) selection.Add(gameObject);
 
@@ -223,32 +234,31 @@ public static class EditorState
     {
         var selection = objects.Distinct().ToArray();
 
-        if (Selection.SequenceEqual(selection)) return;
+        if (CurrentSelection is GameObjectSelection && SelectedObjects.SequenceEqual(selection)) return;
+        if (CurrentSelection == null && selection.Length == 0) return;
 
         Gizmo.Cancel(true);
         Inspector.FinishEdit();
-        Selection.Clear();
-        Selection.AddRange(selection);
+        CurrentSelection = selection.Length == 0 ? null : new GameObjectSelection(Array.AsReadOnly(selection));
     }
 
     public static void ValidateSelection()
     {
-        var remaining = Selection.Where(target => Contains(CurrentScene.GameObjects, target)).ToArray();
+        var remaining = SelectedObjects.Where(target => Contains(CurrentScene.GameObjects, target)).ToArray();
 
-        if (remaining.Length == Selection.Count) return;
+        if (remaining.Length == SelectedObjects.Count) return;
 
         Gizmo.Cancel(true);
         Inspector.FinishEdit(record: false);
-        Selection.Clear();
-        Selection.AddRange(remaining);
+        CurrentSelection = remaining.Length == 0 ? null : new GameObjectSelection(Array.AsReadOnly(remaining));
     }
 
     public static void DuplicateSelection()
     {
-        if (Selection.Count == 0) return;
+        if (SelectedObjects.Count == 0) return;
 
         // This includes suns nested anywhere in a selected subtree.
-        if (SceneLighting.GetSuns(Selection).Any())
+        if (SceneLighting.GetSuns(SelectedObjects).Any())
         {
             Logger.Write(LogLevel.Warning, "Cannot duplicate this selection: the scene supports only one sun light.");
             LogWindow.IsOpen = true;
@@ -257,7 +267,7 @@ public static class EditorState
 
         Gizmo.Cancel(true);
         Inspector.FinishEdit();
-        CommandManager.Do(new DuplicateObjectsCommand(CurrentScene, Selection));
+        CommandManager.Do(new DuplicateObjectsCommand(CurrentScene, SelectedObjects));
     }
 
     internal static bool Contains(List<GameObject> objects, GameObject target)

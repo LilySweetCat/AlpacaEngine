@@ -146,7 +146,7 @@ internal static class HierarchyChecks
             Frame(Vector2.Zero, false);
 
             var rowHeight = ImGui.GetTextLineHeight();
-            var top = ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y;
+            var top = ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + rowHeight;
             var first = new Vector2(80, top + rowHeight / 2);
             var second = first + new Vector2(0, rowHeight);
             var third = first + new Vector2(0, 2 * rowHeight);

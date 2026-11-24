@@ -20,11 +20,13 @@ public static class Gizmo
     public static bool IsDragging => _target != null;
 
     private static GameObject? _target;
+    private static MoveTarget[] _moveTargets = [];
+
+    private sealed record MoveTarget(GameObject Object, Vector3 LocalPosition, Vector3 WorldPosition, Matrix4x4 ParentInverse);
 
     // 0-2: the X/Y/Z axes (arrows, boxes, rings); 3-5: Move planes with X/Y/Z normals.
     private static int _axis;
     private static Vector3 _direction, _planeNormal, _startHit, _position, _localPosition, _scale, _rotation;
-    private static Matrix4x4 _parentWorldInv;
     private static float _length, _lastAngle, _angle;
     private static readonly uint[] Colors = [0xff5b48e5, 0xff38cd83, 0xfff28a45];
 
@@ -71,7 +73,22 @@ public static class Gizmo
 
         if (target != null)
         {
-            if (restore)
+            if (_moveTargets.Length > 0)
+            {
+                var targets = _moveTargets;
+                var before = targets.Select(item => item.LocalPosition).ToArray();
+                var after = targets.Select(item => item.Object.LocalPosition).ToArray();
+
+                void Apply(Vector3[] positions)
+                {
+                    for (var i = 0; i < targets.Length; i++) targets[i].Object.LocalPosition = positions[i];
+                }
+
+                if (restore) Apply(before);
+                else if (!before.SequenceEqual(after))
+                    CommandManager.Record(new AlpacaEngine.Commands.ChangeValueCommand<Vector3[]>(Apply, before, after));
+            }
+            else if (restore)
             {
                 target.LocalPosition = _localPosition;
                 target.LocalScale = _scale;
@@ -87,6 +104,7 @@ public static class Gizmo
         }
 
         _target = null;
+        _moveTargets = [];
     }
 
     // true means: the click belongs to the gizmo, the viewport must not select another object
@@ -120,7 +138,7 @@ public static class Gizmo
             {
                 switch (Mode)
                 {
-                    case Operation.Move: HandleMove(selected, hit); break;
+                    case Operation.Move: HandleMove(hit); break;
                     case Operation.Scale: HandleScale(selected, hit); break;
                     case Operation.Rotate: HandleRotate(selected, hit); break;
                 }
@@ -274,13 +292,22 @@ public static class Gizmo
         if (Mode == Operation.Rotate && (hit - frame.World).LengthSquared() <= 0.000001f) return;
 
         _target = frame.Selected;
+        if (Mode == Operation.Move)
+        {
+            var selection = EditorState.SelectedObjects.Contains(frame.Selected)
+                ? EditorState.SelectedObjects : [frame.Selected];
+            var selected = selection.ToHashSet();
+
+            _moveTargets = selection.Where(item => !HasSelectedAncestor(item, selected))
+                .Select(item => new MoveTarget(item, item.LocalPosition, item.WorldPosition,
+                    item.Parent?.WorldMatrixInverted ?? Matrix4x4.Identity)).ToArray();
+        }
         _axis = hoveredHandle;
         _direction = direction;
         _planeNormal = Vector3.Normalize(normal);
         _startHit = hit;
         _position = frame.World;
         _localPosition = frame.Selected.LocalPosition;
-        _parentWorldInv = frame.Selected.Parent?.WorldMatrixInverted ?? Matrix4x4.Identity;
         _scale = frame.Selected.LocalScale;
         _rotation = frame.Selected.LocalRotation;
         _length = frame.Length;
@@ -288,14 +315,27 @@ public static class Gizmo
     }
 
     // Move: the arrow keeps only the offset along its axis; the quad takes the whole plane offset.
-    private static void HandleMove(GameObject selected, Vector3 hit)
+    private static void HandleMove(Vector3 hit)
     {
-        var worldPosition = _position + (_axis >= 3 ? hit - _startHit :
-            _direction * Vector3.Dot(hit - _startHit, _direction));
+        var offset = _axis >= 3 ? hit - _startHit :
+            _direction * Vector3.Dot(hit - _startHit, _direction);
 
-        // A parent transform means the world position must be converted back to local.
-        selected.LocalPosition = selected.Parent == null
-            ? worldPosition : Vector3.Transform(worldPosition, _parentWorldInv);
+        foreach (var item in _moveTargets)
+        {
+            var worldPosition = item.WorldPosition + offset;
+            item.Object.LocalPosition = item.Object.Parent == null
+                ? worldPosition : Vector3.Transform(worldPosition, item.ParentInverse);
+        }
+    }
+
+    private static bool HasSelectedAncestor(GameObject target, HashSet<GameObject> selected)
+    {
+        for (var parent = target.Parent; parent != null; parent = parent.Parent)
+        {
+            if (selected.Contains(parent)) return true;
+        }
+
+        return false;
     }
 
     // Scale: a drag of half the handle length gives a 1.5x factor; only the chosen component changes.

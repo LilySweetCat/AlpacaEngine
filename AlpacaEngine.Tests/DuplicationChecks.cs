@@ -167,8 +167,14 @@ internal static class DuplicationChecks
 
             Frame(Vector2.Zero, false);
 
-            var first = new Vector2(80, ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + ImGui.GetTextLineHeight() / 2);
+            var settings = new Vector2(80, ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + ImGui.GetTextLineHeight() / 2);
+            var first = settings + new Vector2(0, ImGui.GetTextLineHeight());
             var second = first + new Vector2(0, ImGui.GetTextLineHeight());
+            Frame(settings, false);
+            Frame(settings, true);
+            Frame(settings, false);
+            Check(EditorState.CurrentSelection is SceneSettingsSelection && EditorState.SelectedObjects.Count == 0,
+                "Scene settings can be selected in the hierarchy");
             Frame(first, false);
             Frame(first, true);
             Frame(first, false);

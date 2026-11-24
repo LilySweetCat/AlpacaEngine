@@ -1,4 +1,5 @@
 using System.Numerics;
+using AlpacaEngine.Commands;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
 using ImGuiNET;
@@ -48,6 +49,9 @@ public static class Hierarchy
 
         // Contiguous rows make their top/bottom insertion zones reachable without gaps.
         ImGui.PushStyleVar(ImGuiStyleVar.ItemSpacing, new Vector2(itemSpacing.X, 0));
+        if (ImGui.Selectable("Scene Settings", EditorState.CurrentSelection is SceneSettingsSelection))
+            EditorState.SelectSceneSettings();
+
         DrawGameObjectTree(EditorState.CurrentScene.GameObjects, ref deleteTarget);
         DrawRootDropTarget();
         ImGui.PopStyleVar();

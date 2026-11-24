@@ -1,7 +1,8 @@
+using AlpacaEngine.Editor;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
 
-namespace AlpacaEngine.Editor;
+namespace AlpacaEngine.Commands;
 
 internal sealed class DuplicateObjectsCommand : ICommand
 {

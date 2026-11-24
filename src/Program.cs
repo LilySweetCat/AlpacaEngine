@@ -8,10 +8,10 @@ using AlpacaEngine.Logging;
 
 namespace AlpacaEngine;
 
-class Program
+internal static class Program
 {
     [System.STAThread]
-    static int Main(string[] args)
+    private static int Main(string[] args)
     {
         // --proj <dir>: the working directory for assets and scenes.
         for (var i = 0; i < args.Length; i++)
@@ -125,7 +125,8 @@ class Program
             // STAGE 1: Render the 3D Scene into the RenderTexture
             // ============================================================
             Raylib.BeginTextureMode(EditorState.ViewTexture);
-            Raylib.ClearBackground(Color.Black);
+            var background = Vector3.Clamp(EditorState.CurrentScene.BackgroundColor, Vector3.Zero, Vector3.One);
+            Raylib.ClearBackground(new Color((int)(background.X * 255), (int)(background.Y * 255), (int)(background.Z * 255), 255));
 
             Raylib.BeginMode3D(EditorState.CurrentCamera);
 
