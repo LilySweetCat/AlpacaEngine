@@ -26,7 +26,7 @@ public static class EditorState
 
             if (ReferenceEquals(field, value)) return;
 
-            Gizmo.Cancel(true);
+            Gizmo.Gizmo.Cancel(true);
             Inspector.FinishEdit();
             SceneSettingsWindow.FinishEdit();
             CommandManager.Clear();
@@ -227,7 +227,7 @@ public static class EditorState
 
         if (SelectedObjects.SequenceEqual(selection)) return;
 
-        Gizmo.Cancel(true);
+        Gizmo.Gizmo.Cancel(true);
         Inspector.FinishEdit();
         Selection.Clear();
         Selection.AddRange(selection);
@@ -239,7 +239,7 @@ public static class EditorState
 
         if (remaining.Length == SelectedObjects.Count) return;
 
-        Gizmo.Cancel(true);
+        Gizmo.Gizmo.Cancel(true);
         Inspector.FinishEdit(record: false);
         Selection.Clear();
         Selection.AddRange(remaining);
@@ -257,7 +257,7 @@ public static class EditorState
             return;
         }
 
-        Gizmo.Cancel(true);
+        Gizmo.Gizmo.Cancel(true);
         Inspector.FinishEdit();
         CommandManager.Do(new DuplicateObjectsCommand(CurrentScene, SelectedObjects));
     }
@@ -338,7 +338,7 @@ public static class EditorState
         {
             if (objects.Contains(target))
             {
-                Gizmo.Cancel(true);
+                Gizmo.Gizmo.Cancel(true);
                 Inspector.FinishEdit();
 
                 var remaining = new List<GameObject>(objects);

@@ -2,6 +2,8 @@ using System.Numerics;
 using AlpacaEngine;
 using AlpacaEngine.Commands;
 using AlpacaEngine.Editor;
+using AlpacaEngine.Editor.Gizmo;
+using AlpacaEngine.Editor.Viewport;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Extensions;

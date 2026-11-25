@@ -1,9 +1,10 @@
 using System.Numerics;
+using AlpacaEngine.Editor.Viewport;
 using AlpacaEngine.GameObjects;
 using ImGuiNET;
 using Raylib_cs;
 
-namespace AlpacaEngine.Editor;
+namespace AlpacaEngine.Editor.Gizmo;
 
 // Move / Rotate / Scale: screen-space handles drawn over the viewport, not 3D meshes.
 // See docs/gizmo_rotate_scale_visual.html: pick handle -> click -> drag -> apply.

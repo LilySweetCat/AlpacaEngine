@@ -1,10 +1,10 @@
 using System.Numerics;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
-using Raylib_cs;
 using AlpacaEngine.Rendering;
+using Raylib_cs;
 
-namespace AlpacaEngine.Editor;
+namespace AlpacaEngine.Editor.Viewport;
 
 // Mouse-to-object selection in the 3D viewport.
 public static class Picking

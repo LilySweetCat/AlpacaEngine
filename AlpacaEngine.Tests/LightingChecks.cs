@@ -2,6 +2,7 @@ using System.Numerics;
 using System.Text.Json;
 using AlpacaEngine;
 using AlpacaEngine.Editor;
+using AlpacaEngine.Editor.Viewport;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;

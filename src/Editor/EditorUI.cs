@@ -22,7 +22,7 @@ public static class EditorUI
         SceneSettingsWindow.Render();
 
         // PANEL C: 3D Viewport
-        Viewport.Render();
+        Viewport.Viewport.Render();
 
         // PANEL D: Assets browser
         AssetBrowser.Render();
@@ -35,7 +35,7 @@ public static class EditorUI
     internal static void HandleShortcuts()
     {
         // Active widgets keep their own Undo (notably InputText); do not interrupt a drag.
-        if (ImGui.IsAnyItemActive() || ImGui.GetIO().WantTextInput || Gizmo.IsDragging
+        if (ImGui.IsAnyItemActive() || ImGui.GetIO().WantTextInput || Gizmo.Gizmo.IsDragging
             || ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId | ImGuiPopupFlags.AnyPopupLevel)) return;
         
         if (ImGui.GetIO().KeyCtrl)
@@ -46,7 +46,7 @@ public static class EditorUI
         }
         else if (ImGui.GetIO().KeyShift)
         {
-            if (ImGui.IsKeyPressed(ImGuiKey.D, false) && (Hierarchy.Hierarchy.IsFocused || Viewport.IsFocused))
+            if (ImGui.IsKeyPressed(ImGuiKey.D, false) && (Hierarchy.Hierarchy.IsFocused || Viewport.Viewport.IsFocused))
                 EditorState.DuplicateSelection();
         }
     }
@@ -82,7 +82,7 @@ public static class EditorUI
 
             if (!canRedo) ImGui.EndDisabled();
 
-            var canDuplicate = EditorState.SelectedObjects.Count > 0 && !Gizmo.IsDragging;
+            var canDuplicate = EditorState.SelectedObjects.Count > 0 && !Gizmo.Gizmo.IsDragging;
             ImGui.BeginDisabled(!canDuplicate);
 
             if (ImGui.MenuItem("Duplicate", "Shift+D")) EditorState.DuplicateSelection();

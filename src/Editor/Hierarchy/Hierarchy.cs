@@ -55,7 +55,7 @@ public static class Hierarchy
         FinishDragDrop();
 
         if (ImGui.IsWindowFocused() && !ImGui.IsAnyItemActive()
-            && !ImGui.GetIO().WantTextInput && !Gizmo.IsDragging
+            && !ImGui.GetIO().WantTextInput && !Gizmo.Gizmo.IsDragging
             && !_openRenamePopup && !ImGui.IsPopupOpen("", ImGuiPopupFlags.AnyPopupId)
             && ImGui.IsKeyPressed(ImGuiKey.Delete, false))
             deleteTarget = EditorState.Selected;
@@ -276,7 +276,7 @@ public static class Hierarchy
         // Apply only after drawing the whole tree, never while enumerating its lists.
         if (_pendingMove != null)
         {
-            Gizmo.Cancel(true);
+            Gizmo.Gizmo.Cancel(true);
             Inspector.FinishEdit();
             CommandManager.Do(_pendingMove);
         }

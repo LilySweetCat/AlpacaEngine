@@ -1,6 +1,7 @@
 using System.Numerics;
 using AlpacaEngine;
 using AlpacaEngine.Editor;
+using AlpacaEngine.Editor.Gizmo;
 using AlpacaEngine.Extensions;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;

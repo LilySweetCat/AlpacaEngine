@@ -4,7 +4,7 @@ using AlpacaEngine.Extensions;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
 
-namespace AlpacaEngine.Editor;
+namespace AlpacaEngine.Editor.Gizmo;
 
 // All previews are calculated from the click-time snapshot, never from the previous frame.
 internal sealed class GizmoGesture
@@ -28,16 +28,16 @@ internal sealed class GizmoGesture
 
     private readonly Target[] _targets;
     private readonly Dictionary<GameObject, Matrix4x4> _ancestorLocals = [];
-    private readonly Gizmo.PivotPoint _pivotMode;
+    private readonly Editor.Gizmo.Gizmo.PivotPoint _pivotMode;
     private readonly bool _localAxes;
 
     internal Vector3 Pivot { get; }
     internal Quaternion Axes { get; }
     internal string? Error { get; private set; }
 
-    internal static Vector3 GetPivot(IReadOnlyList<GameObject> selection, GameObject active, Gizmo.PivotPoint mode)
+    internal static Vector3 GetPivot(IReadOnlyList<GameObject> selection, GameObject active, Editor.Gizmo.Gizmo.PivotPoint mode)
     {
-        if (mode != Gizmo.PivotPoint.SelectionCenter) return active.WorldPosition;
+        if (mode != Editor.Gizmo.Gizmo.PivotPoint.SelectionCenter) return active.WorldPosition;
 
         var sum = Vector3.Zero;
 
@@ -46,7 +46,7 @@ internal sealed class GizmoGesture
         return sum / selection.Count;
     }
 
-    internal GizmoGesture(IReadOnlyList<GameObject> selection, GameObject active, Gizmo.PivotPoint pivotMode, bool localAxes)
+    internal GizmoGesture(IReadOnlyList<GameObject> selection, GameObject active, Editor.Gizmo.Gizmo.PivotPoint pivotMode, bool localAxes)
     {
         _pivotMode = pivotMode;
         _localAxes = localAxes;
@@ -89,13 +89,13 @@ internal sealed class GizmoGesture
     private Vector3 Direction(Target target, int axis)
     {
         var unit = axis switch { 0 => Vector3.UnitX, 1 => Vector3.UnitY, _ => Vector3.UnitZ };
-        var rotation = _pivotMode == Gizmo.PivotPoint.IndividualOrigins && _localAxes ? target.Rotation : Axes;
+        var rotation = _pivotMode == Editor.Gizmo.Gizmo.PivotPoint.IndividualOrigins && _localAxes ? target.Rotation : Axes;
         return Vector3.Normalize(Vector3.Transform(unit, rotation));
     }
 
     private Matrix4x4 AroundPivot(Target target, Matrix4x4 change)
     {
-        var pivot = _pivotMode == Gizmo.PivotPoint.IndividualOrigins ? target.World.Translation : Pivot;
+        var pivot = _pivotMode == Editor.Gizmo.Gizmo.PivotPoint.IndividualOrigins ? target.World.Translation : Pivot;
         return target.World * Matrix4x4.CreateTranslation(-pivot) * change * Matrix4x4.CreateTranslation(pivot);
     }
 
