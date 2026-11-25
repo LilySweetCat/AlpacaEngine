@@ -20,6 +20,12 @@ if (args.Contains("--logging-only"))
     return;
 }
 
+if (args.Contains("--gizmo-pivot-only"))
+{
+    GizmoPivotChecks.Run();
+    return;
+}
+
 if (args.Contains("--hierarchy-only"))
 {
     HierarchyChecks.Run();
@@ -579,6 +585,7 @@ try
         EditorState.ViewTexture = new RenderTexture2D { Texture = new Texture2D { Width = 640, Height = 480 } };
         Gizmo.Mode = Gizmo.Operation.Move;
         Gizmo.Local = false;
+        Gizmo.Pivot = Gizmo.PivotPoint.ActiveObject;
 
         bool Frame(Vector2 mouse, bool down)
         {
@@ -679,6 +686,42 @@ try
         Frame(new Vector2(380, 180), true);
         Frame(new Vector2(380, 180), false);
         Check(!CommandManager.CanUndo, "Click without movement does not enter history");
+
+        var leftTarget = new GameObject { LocalPosition = new Vector3(-2, 0, 0) };
+        target.LocalPosition = new Vector3(2, 0, 0);
+        target.LocalRotation = Vector3.Zero;
+        target.LocalScale = Vector3.One;
+        EditorState.CurrentScene = new Scene { GameObjects = [leftTarget, target] };
+        EditorState.Select(leftTarget);
+        EditorState.Select(target, true);
+        Gizmo.Pivot = Gizmo.PivotPoint.SelectionCenter;
+        Gizmo.Mode = Gizmo.Operation.Rotate;
+        Frame(new Vector2(380, 180), false);
+        Check(Frame(new Vector2(380, 180), true) && Gizmo.IsDragging, "Group ring is picked at the selection center");
+        Frame(new Vector2(260, 180), true);
+        Frame(new Vector2(260, 180), false);
+        Check(Vector3.Distance(leftTarget.WorldPosition, new Vector3(0, -2, 0)) < 0.001f
+            && Vector3.Distance(target.WorldPosition, new Vector3(0, 2, 0)) < 0.001f,
+            "Mouse drag rotates both objects around the selection center");
+        CommandManager.Undo();
+        Check(target.LocalPosition == new Vector3(2, 0, 0) && leftTarget.LocalRotation == Vector3.Zero,
+            "Group mouse rotation is one Undo");
+        CommandManager.Clear();
+
+        Gizmo.Mode = Gizmo.Operation.Scale;
+        Frame(new Vector2(390, 240), false);
+        Check(Frame(new Vector2(390, 240), true) && Gizmo.IsDragging, "Group scale handle is picked at the selection center");
+        Frame(new Vector2(410, 240), true);
+        Check(target.LocalScale.X > 1.1f && leftTarget.LocalScale.X > 1.1f
+            && target.WorldPosition.X > 2.2f && leftTarget.WorldPosition.X < -2.2f,
+            "Mouse scale changes both sizes and spacing");
+        io.AddKeyEvent(ImGuiKey.Escape, true);
+        Frame(new Vector2(410, 240), true);
+        Check(!Gizmo.IsDragging && target.LocalScale == Vector3.One && leftTarget.LocalScale == Vector3.One
+            && target.LocalPosition == new Vector3(2, 0, 0) && !CommandManager.CanUndo,
+            "Escape restores the entire group without history");
+        io.AddKeyEvent(ImGuiKey.Escape, false);
+        Frame(new Vector2(410, 240), false);
     }
     finally { Gizmo.Cancel(); ImGui.DestroyContext(context); }
 }
@@ -687,3 +730,4 @@ Console.WriteLine("Command history, Inspector and Gizmo checks passed.");
 LightingChecks.Run();
 HierarchyChecks.Run();
 DuplicationChecks.Run();
+GizmoPivotChecks.Run();

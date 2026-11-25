@@ -108,6 +108,7 @@ internal static class LightingChecks
         SceneLighting.Initialize();
 
         var target = Raylib.LoadRenderTexture(128, 128);
+        var plainModel = Raylib.LoadModelFromMesh(Raylib.GenMeshCube(1, 1, 1));
         var meshModel = Raylib.LoadModelFromMesh(Raylib.GenMeshCube(1, 1, 1));
         var image = Raylib.GenImageColor(2, 2, new Color(180, 100, 60, 255));
         var texture = Raylib.LoadTextureFromImage(image);
@@ -133,8 +134,7 @@ internal static class LightingChecks
                 SceneLighting.Prepare(scene);
                 cube.PushTransform();
 
-                if (model) SceneLighting.DrawModel(meshModel, cube, Color.White);
-                else SceneLighting.DrawCube(cube, Color.White);
+                SceneLighting.DrawModel(model ? meshModel : plainModel, cube, Color.White);
 
                 cube.PopTransform();
                 Raylib.EndMode3D();
@@ -198,6 +198,7 @@ internal static class LightingChecks
         }
         finally
         {
+            Raylib.UnloadModel(plainModel);
             Raylib.UnloadModel(meshModel);
             Raylib.UnloadTexture(texture);
             Raylib.UnloadRenderTexture(target);

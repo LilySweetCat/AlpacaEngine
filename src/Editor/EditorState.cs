@@ -28,6 +28,7 @@ public static class EditorState
 
             Gizmo.Cancel(true);
             Inspector.FinishEdit();
+            SceneSettingsWindow.FinishEdit();
             CommandManager.Clear();
             Selected = null;
             CurrentScenePath = null;
@@ -191,9 +192,8 @@ public static class EditorState
         if (deletingScene) CurrentScene = new Scene();
     }
 
-    public static Selection? CurrentSelection { get; private set; }
-    public static IReadOnlyList<GameObject> SelectedObjects =>
-        (CurrentSelection as GameObjectSelection)?.Objects ?? Array.Empty<GameObject>();
+    private static readonly List<GameObject> Selection = [];
+    public static IReadOnlyList<GameObject> SelectedObjects { get; } = Selection.AsReadOnly();
 
     // The last selected object remains the target of the Inspector and Gizmo.
     public static GameObject? Selected
@@ -203,15 +203,6 @@ public static class EditorState
     }
 
     public static bool IsSelected(GameObject gameObject) => SelectedObjects.Contains(gameObject);
-
-    public static void SelectSceneSettings()
-    {
-        if (CurrentSelection is SceneSettingsSelection) return;
-
-        Gizmo.Cancel(true);
-        Inspector.FinishEdit();
-        CurrentSelection = new SceneSettingsSelection();
-    }
 
     public static void Select(GameObject? gameObject, bool toggle = false)
     {
@@ -234,12 +225,12 @@ public static class EditorState
     {
         var selection = objects.Distinct().ToArray();
 
-        if (CurrentSelection is GameObjectSelection && SelectedObjects.SequenceEqual(selection)) return;
-        if (CurrentSelection == null && selection.Length == 0) return;
+        if (SelectedObjects.SequenceEqual(selection)) return;
 
         Gizmo.Cancel(true);
         Inspector.FinishEdit();
-        CurrentSelection = selection.Length == 0 ? null : new GameObjectSelection(Array.AsReadOnly(selection));
+        Selection.Clear();
+        Selection.AddRange(selection);
     }
 
     public static void ValidateSelection()
@@ -250,7 +241,8 @@ public static class EditorState
 
         Gizmo.Cancel(true);
         Inspector.FinishEdit(record: false);
-        CurrentSelection = remaining.Length == 0 ? null : new GameObjectSelection(Array.AsReadOnly(remaining));
+        Selection.Clear();
+        Selection.AddRange(remaining);
     }
 
     public static void DuplicateSelection()
@@ -334,7 +326,7 @@ public static class EditorState
         Inspector.FinishEdit();
         CommandManager.Do(new ChangeValueCommand<List<IComponent>>(
             components => target.Components = components, target.Components,
-            new List<IComponent>(target.Components) { component }));
+            [..target.Components, component]));
     }
 
     public static void DeleteGameObject(GameObject target)

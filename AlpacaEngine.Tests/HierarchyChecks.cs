@@ -3,6 +3,8 @@
 using System.Numerics;
 using AlpacaEngine;
 using AlpacaEngine.Editor;
+using AlpacaEngine.Editor.Hierarchy;
+using AlpacaEngine.Extensions;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.Managers;
 using ImGuiNET;
@@ -56,8 +58,8 @@ internal static class HierarchyChecks
         CommandManager.Clear();
         Move(a, b, 0);
         Check(a.Parent == b && b.Children!.Single() == a && !scene.GameObjects.Contains(a), "Reparent whole subtree");
-        Check(HierarchyMove.MatricesMatch(world, a.WorldMatrix)
-            && HierarchyMove.MatricesMatch(childWorld, descendant.WorldMatrix), "Preserve world transform including mirrored scale and descendants");
+        Check(TransformMath.MatricesMatch(world, a.WorldMatrix)
+            && TransformMath.MatricesMatch(childWorld, descendant.WorldMatrix), "Preserve world transform including mirrored scale and descendants");
         Check(!HierarchyMove.TryCreate(scene, b, descendant, 0, out _, out _), "Reject descendant cycle");
         Check(!HierarchyMove.TryCreate(scene, a, a, 0, out _, out _), "Reject self-parenting");
         CommandManager.Undo();
@@ -66,7 +68,7 @@ internal static class HierarchyChecks
             "One Undo restores parent, null child list, index and exact local values");
         CommandManager.Redo();
         Move(a, null, scene.GameObjects.Count);
-        Check(a.Parent == null && scene.GameObjects.Last() == a && HierarchyMove.MatricesMatch(world, a.WorldMatrix),
+        Check(a.Parent == null && scene.GameObjects.Last() == a && TransformMath.MatricesMatch(world, a.WorldMatrix),
             "Return to root preserves world transform");
         CommandManager.Undo();
         CommandManager.Undo();
@@ -108,7 +110,7 @@ internal static class HierarchyChecks
             EditorState.CurrentScene = new Scene { GameObjects = [b, c] };
             world = a.WorldMatrix;
             Move(a, b, 0);
-            Check(HierarchyMove.MatricesMatch(world, a.WorldMatrix), "Random transformed parent round trip");
+            Check(TransformMath.MatricesMatch(world, a.WorldMatrix), "Random transformed parent round trip");
         }
 
         RunDragChecks();
@@ -146,7 +148,7 @@ internal static class HierarchyChecks
             Frame(Vector2.Zero, false);
 
             var rowHeight = ImGui.GetTextLineHeight();
-            var top = ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + rowHeight;
+            var top = ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y;
             var first = new Vector2(80, top + rowHeight / 2);
             var second = first + new Vector2(0, rowHeight);
             var third = first + new Vector2(0, 2 * rowHeight);

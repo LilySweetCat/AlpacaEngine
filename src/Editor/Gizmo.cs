@@ -1,7 +1,5 @@
 using System.Numerics;
-using AlpacaEngine.Extensions;
 using AlpacaEngine.GameObjects;
-using AlpacaEngine.Managers;
 using ImGuiNET;
 using Raylib_cs;
 
@@ -13,6 +11,10 @@ namespace AlpacaEngine.Editor;
 public static class Gizmo
 {
     public enum Operation { Move, Rotate, Scale }
+    public enum PivotPoint { SelectionCenter, IndividualOrigins, ActiveObject }
+
+    public static PivotPoint Pivot;
+    public static string? TransformError { get; private set; }
 
     public static Operation Mode;
     public static bool Local;
@@ -20,13 +22,11 @@ public static class Gizmo
     public static bool IsDragging => _target != null;
 
     private static GameObject? _target;
-    private static MoveTarget[] _moveTargets = [];
-
-    private sealed record MoveTarget(GameObject Object, Vector3 LocalPosition, Vector3 WorldPosition, Matrix4x4 ParentInverse);
+    private static GizmoGesture? _gesture;
 
     // 0-2: the X/Y/Z axes (arrows, boxes, rings); 3-5: Move planes with X/Y/Z normals.
     private static int _axis;
-    private static Vector3 _direction, _planeNormal, _startHit, _position, _localPosition, _scale, _rotation;
+    private static Vector3 _direction, _planeNormal, _startHit, _position;
     private static float _length, _lastAngle, _angle;
     private static readonly uint[] Colors = [0xff5b48e5, 0xff38cd83, 0xfff28a45];
 
@@ -69,42 +69,11 @@ public static class Gizmo
     // Escape restores the original transform; releasing the mouse records one Undo step.
     public static void Cancel(bool restore = false)
     {
-        var target = _target;
-
-        if (target != null)
-        {
-            if (_moveTargets.Length > 0)
-            {
-                var targets = _moveTargets;
-                var before = targets.Select(item => item.LocalPosition).ToArray();
-                var after = targets.Select(item => item.Object.LocalPosition).ToArray();
-
-                void Apply(Vector3[] positions)
-                {
-                    for (var i = 0; i < targets.Length; i++) targets[i].Object.LocalPosition = positions[i];
-                }
-
-                if (restore) Apply(before);
-                else if (!before.SequenceEqual(after))
-                    CommandManager.Record(new AlpacaEngine.Commands.ChangeValueCommand<Vector3[]>(Apply, before, after));
-            }
-            else if (restore)
-            {
-                target.LocalPosition = _localPosition;
-                target.LocalScale = _scale;
-                target.LocalRotation = _rotation;
-            }
-            else
-            {
-                CommandManager.RecordChange(
-                    value => (target.LocalPosition, target.LocalScale, target.LocalRotation) = value,
-                    (_localPosition, _scale, _rotation),
-                    (target.LocalPosition, target.LocalScale, target.LocalRotation));
-            }
-        }
-
+        _gesture?.Finish(restore);
+        _gesture = null;
         _target = null;
-        _moveTargets = [];
+
+        if (restore) TransformError = null;
     }
 
     // true means: the click belongs to the gizmo, the viewport must not select another object
@@ -139,15 +108,15 @@ public static class Gizmo
                 switch (Mode)
                 {
                     case Operation.Move: HandleMove(hit); break;
-                    case Operation.Scale: HandleScale(selected, hit); break;
-                    case Operation.Rotate: HandleRotate(selected, hit); break;
+                    case Operation.Scale: HandleScale(hit); break;
+                    case Operation.Rotate: HandleRotate(hit); break;
                 }
             }
         }
 
         var frame = CreateFrame(selected, camera, min, size);
 
-        // Handles are anchored at the object's world position; skip them behind the camera.
+        // Skip handles when their pivot is behind the camera.
         if (frame == null) return consumed;
 
         var drawList = ImGui.GetWindowDrawList();
@@ -168,6 +137,8 @@ public static class Gizmo
             consumed = true;
         }
 
+        if (TransformError != null && (hovered || IsDragging)) ImGui.SetTooltip(TransformError);
+
         return consumed;
     }
 
@@ -187,7 +158,7 @@ public static class Gizmo
     private static HandleFrame? CreateFrame(GameObject selected, Camera3D camera, Vector2 min, Vector2 size)
     {
         var forward = Vector3.Normalize(camera.Target - camera.Position);
-        var world = selected.WorldPosition;
+        var world = GizmoGesture.GetPivot(GetSelection(selected), selected, Pivot);
         var depth = Vector3.Dot(world - camera.Position, forward);
 
         if (depth <= 0.01f && camera.Projection == CameraProjection.Perspective) return null;
@@ -203,10 +174,9 @@ public static class Gizmo
         var origin = min + Raylib.GetWorldToScreenEx(world, camera, texture.Width, texture.Height)
             / new Vector2(texture.Width, texture.Height) * size;
 
-        // Scale always follows local axes; Move/Rotate follow world axes unless Local is on.
-        var localAxes = Local || Mode == Operation.Scale;
-
-        return new HandleFrame(camera, min, size, selected, world, selected.WorldRotation, localAxes, length, origin);
+        // Keep the gesture axes fixed while objects rotate underneath the handles.
+        var rotation = _gesture?.Axes ?? (Local ? selected.WorldRotation : Quaternion.Identity);
+        return new HandleFrame(camera, min, size, selected, world, rotation, Local, length, origin);
     }
 
     // Find the handle closest to the cursor within 9 pixels; axis and plane indices are listed above.
@@ -291,25 +261,15 @@ public static class Gizmo
 
         if (Mode == Operation.Rotate && (hit - frame.World).LengthSquared() <= 0.000001f) return;
 
+        TransformError = null;
         _target = frame.Selected;
-        if (Mode == Operation.Move)
-        {
-            var selection = EditorState.SelectedObjects.Contains(frame.Selected)
-                ? EditorState.SelectedObjects : [frame.Selected];
-            var selected = selection.ToHashSet();
+        _gesture = new GizmoGesture(GetSelection(frame.Selected), frame.Selected, Pivot, Local);
 
-            _moveTargets = selection.Where(item => !HasSelectedAncestor(item, selected))
-                .Select(item => new MoveTarget(item, item.LocalPosition, item.WorldPosition,
-                    item.Parent?.WorldMatrixInverted ?? Matrix4x4.Identity)).ToArray();
-        }
         _axis = hoveredHandle;
         _direction = direction;
         _planeNormal = Vector3.Normalize(normal);
         _startHit = hit;
         _position = frame.World;
-        _localPosition = frame.Selected.LocalPosition;
-        _scale = frame.Selected.LocalScale;
-        _rotation = frame.Selected.LocalRotation;
         _length = frame.Length;
         _angle = _lastAngle = 0;
     }
@@ -320,38 +280,23 @@ public static class Gizmo
         var offset = _axis >= 3 ? hit - _startHit :
             _direction * Vector3.Dot(hit - _startHit, _direction);
 
-        foreach (var item in _moveTargets)
-        {
-            var worldPosition = item.WorldPosition + offset;
-            item.Object.LocalPosition = item.Object.Parent == null
-                ? worldPosition : Vector3.Transform(worldPosition, item.ParentInverse);
-        }
+        _gesture!.Move(offset);
+        TransformError = _gesture.Error;
     }
 
-    private static bool HasSelectedAncestor(GameObject target, HashSet<GameObject> selected)
-    {
-        for (var parent = target.Parent; parent != null; parent = parent.Parent)
-        {
-            if (selected.Contains(parent)) return true;
-        }
+    private static IReadOnlyList<GameObject> GetSelection(GameObject selected) =>
+        EditorState.SelectedObjects.Contains(selected) ? EditorState.SelectedObjects : [selected];
 
-        return false;
-    }
-
-    // Scale: a drag of half the handle length gives a 1.5x factor; only the chosen component changes.
-    private static void HandleScale(GameObject selected, Vector3 hit)
+    // Scale is measured against the original handle length; 1% prevents collapse and axis flips.
+    private static void HandleScale(Vector3 hit)
     {
-        // Keep the drag factor above 1% and each scale component above 0.001
-        // so dragging cannot collapse the object to zero or flip its axes.
         var factor = MathF.Max(0.01f, 1 + Vector3.Dot(hit - _startHit, _direction) / _length);
-        var scale = _scale;
-
-        scale[_axis] = MathF.Max(0.001f, _scale[_axis] * factor);
-        selected.LocalScale = scale;
+        _gesture!.Scale(_axis, factor);
+        TransformError = _gesture.Error;
     }
 
     // Rotate: the angle between the start point and the current point around the ring center.
-    private static void HandleRotate(GameObject selected, Vector3 hit)
+    private static void HandleRotate(Vector3 hit)
     {
         if ((hit - _position).LengthSquared() <= 0.000001f) return;
 
@@ -360,8 +305,8 @@ public static class Gizmo
         // Accumulating small steps allows passing the +/-180 degree border and making a full turn.
         _angle += MathF.IEEERemainder(angle - _lastAngle, 2 * MathF.PI);
         _lastAngle = angle;
-        selected.LocalRotation = (Quaternion.CreateFromAxisAngle(_direction, _angle)
-            * GameObject.Orientation(_rotation)).ToEulerAngles();
+        _gesture!.Rotate(_axis, _angle);
+        TransformError = _gesture.Error;
     }
 
     // Draw the active handles over the viewport image; the hovered or dragged one is highlighted.

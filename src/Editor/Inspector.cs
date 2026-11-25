@@ -1,5 +1,4 @@
 using AlpacaEngine.GameObjects;
-using System.Numerics;
 using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;
 using ImGuiNET;
@@ -8,17 +7,14 @@ namespace AlpacaEngine.Editor;
 
 public static class Inspector
 {
-    private static object? _editTarget;
+    private static GameObject? _editTarget;
     private static string? _editProperty;
     private static Action? _finishEdit;
 
     public static void Render()
     {
         // Another panel changed the selection: close the pending edit of the old object first.
-        var editTarget = EditorState.CurrentSelection is SceneSettingsSelection
-            ? (object)EditorState.CurrentScene : EditorState.Selected;
-
-        if (_editTarget != null && !ReferenceEquals(_editTarget, editTarget)) FinishEdit();
+        if (_editTarget != EditorState.Selected) FinishEdit();
 
         if (!ImGui.Begin("Inspector"))
         {
@@ -29,21 +25,7 @@ public static class Inspector
 
         var target = EditorState.Selected;
 
-        if (EditorState.CurrentSelection is SceneSettingsSelection)
-        {
-            var scene = EditorState.CurrentScene;
-            var color = scene.BackgroundColor;
-            ImGui.ColorEdit3("Background Color", ref scene.BackgroundColor);
-            TrackEdit(scene, nameof(scene.BackgroundColor), color, () => scene.BackgroundColor, value => scene.BackgroundColor = value);
-
-            if (ImGui.Button("Reset Background Color"))
-            {
-                FinishEdit();
-                CommandManager.RecordChange(value => scene.BackgroundColor = value, scene.BackgroundColor, Vector3.Zero);
-                scene.BackgroundColor = Vector3.Zero;
-            }
-        }
-        else if (target != null)
+        if (target != null)
         {
             if (EditorState.SelectedObjects.Count > 1)
                 ImGui.TextWrapped($"{EditorState.SelectedObjects.Count} objects selected. Editing the last selected object.");
@@ -92,7 +74,7 @@ public static class Inspector
         ImGui.End();
     }
 
-    internal static void TrackEdit<T>(object target, string property, T before, Func<T> getValue, Action<T> setValue)
+    internal static void TrackEdit<T>(GameObject target, string property, T before, Func<T> getValue, Action<T> setValue)
     {
         if (ImGui.IsItemActivated())
         {

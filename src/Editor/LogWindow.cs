@@ -6,7 +6,7 @@ namespace AlpacaEngine.Editor;
 
 public static class LogWindow
 {
-    public static bool IsOpen;
+    public static bool IsOpen = true;
     private static bool _showDebug;
     private static bool _showInfo = true;
     private static bool _showWarning = true;

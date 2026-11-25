@@ -15,10 +15,11 @@ public static class EditorUI
         DrawTopMenu();
 
         // PANEL A: Hierarchy
-        Hierarchy.Render();
+        Hierarchy.Hierarchy.Render();
 
         // PANEL B: Inspector
         Inspector.Render();
+        SceneSettingsWindow.Render();
 
         // PANEL C: 3D Viewport
         Viewport.Render();
@@ -45,7 +46,7 @@ public static class EditorUI
         }
         else if (ImGui.GetIO().KeyShift)
         {
-            if (ImGui.IsKeyPressed(ImGuiKey.D, false) && (Hierarchy.IsFocused || Viewport.IsFocused))
+            if (ImGui.IsKeyPressed(ImGuiKey.D, false) && (Hierarchy.Hierarchy.IsFocused || Viewport.IsFocused))
                 EditorState.DuplicateSelection();
         }
     }
@@ -93,6 +94,7 @@ public static class EditorUI
 
         if (ImGui.BeginMenu("Editor"))
         {
+            ImGui.MenuItem("Scene Settings", "", ref SceneSettingsWindow.IsOpen);
             ImGui.MenuItem("Logs", "", ref LogWindow.IsOpen);
             ImGui.EndMenu();
         }

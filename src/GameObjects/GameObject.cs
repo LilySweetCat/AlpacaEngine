@@ -62,7 +62,7 @@ public class GameObject
     public static Quaternion Orientation(Vector3 degrees) => Quaternion.CreateFromYawPitchRoll(
         degrees.Y * MathF.PI / 180, degrees.X * MathF.PI / 180, degrees.Z * MathF.PI / 180);
 
-    public virtual unsafe void PushTransform()
+    public unsafe void PushTransform()
     {
         Rlgl.PushMatrix();
 
@@ -80,14 +80,14 @@ public class GameObject
         Rlgl.MultMatrixf(values);
     }
 
-    public virtual void PopTransform() => Rlgl.PopMatrix();
+    public void PopTransform() => Rlgl.PopMatrix();
 
-    public virtual void Render()
+    public void Render()
     {
         foreach (var component in Components) component.Process(this);
     }
 
-    public virtual void RenderOnSelected()
+    public void RenderOnSelected()
     {
         foreach (var component in Components) component.ProcessOnSelected(this);
     }

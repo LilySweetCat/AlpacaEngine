@@ -5,14 +5,13 @@ using Raylib_cs;
 
 namespace AlpacaEngine.Rendering;
 
-// Owns the shared shader and cube mesh; components only serialize light settings.
+// Owns the shared shader; components only serialize light settings.
 public static class SceneLighting
 {
     // World-space radius shared by the visible sun marker and its picking sphere.
     internal const float SunMarkerRadius = 0.2f;
 
     private static Shader _shader;
-    private static Model _cube;
     private static bool _initialized;
     private static int _enabledLocation;
     private static int _directionLocation;
@@ -55,7 +54,6 @@ public static class SceneLighting
         for (var i = 0; i < NormalLocations.Length; i++)
             NormalLocations[i] = Raylib.GetShaderLocation(_shader, "normalRow" + i);
 
-        _cube = Raylib.LoadModelFromMesh(Raylib.GenMeshCube(1f, 1f, 1f));
         _initialized = true;
     }
 
@@ -115,17 +113,6 @@ public static class SceneLighting
         }
     }
 
-    public static void DrawCube(GameObject owner, Color tint)
-    {
-        if (!_initialized)
-        {
-            Raylib.DrawCube(Vector3.Zero, 1f, 1f, 1f, tint);
-            return;
-        }
-
-        DrawModel(_cube, owner, tint);
-    }
-
     public static void DrawGizmos(Scene scene, GameObject? selected)
     {
         foreach (var (owner, _) in GetSuns(scene.GameObjects))
@@ -148,7 +135,6 @@ public static class SceneLighting
     {
         if (!_initialized) return;
 
-        Raylib.UnloadModel(_cube);
         Raylib.UnloadShader(_shader);
         _initialized = false;
     }

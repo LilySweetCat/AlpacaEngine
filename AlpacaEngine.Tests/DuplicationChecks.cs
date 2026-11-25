@@ -2,7 +2,9 @@
 
 using System.Numerics;
 using AlpacaEngine;
+using AlpacaEngine.Extensions;
 using AlpacaEngine.Editor;
+using AlpacaEngine.Editor.Hierarchy;
 using AlpacaEngine.GameObjects;
 using AlpacaEngine.GameObjects.Components;
 using AlpacaEngine.Managers;
@@ -47,7 +49,7 @@ internal static class DuplicationChecks
         Check(new[] { crate.Id, child.Id, other.Id, copy.Id, childCopy.Id, copies[1].Id }.Distinct().Count() == 6,
             "Every duplicate has a fresh ID");
         Check(copy.LocalPosition == crate.LocalPosition && copy.LocalRotation == crate.LocalRotation
-            && copy.LocalScale == crate.LocalScale && HierarchyMove.MatricesMatch(child.WorldMatrix, childCopy.WorldMatrix),
+            && copy.LocalScale == crate.LocalScale && TransformMath.MatricesMatch(child.WorldMatrix, childCopy.WorldMatrix),
             "Exact local and world transforms survive recursive duplication");
         Check(!ReferenceEquals(copy.Components, crate.Components)
             && !ReferenceEquals(copy.Components[0], crate.Components[0])
@@ -167,14 +169,8 @@ internal static class DuplicationChecks
 
             Frame(Vector2.Zero, false);
 
-            var settings = new Vector2(80, ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + ImGui.GetTextLineHeight() / 2);
-            var first = settings + new Vector2(0, ImGui.GetTextLineHeight());
+            var first = new Vector2(80, ImGui.GetFrameHeight() + ImGui.GetStyle().WindowPadding.Y + ImGui.GetTextLineHeight() / 2);
             var second = first + new Vector2(0, ImGui.GetTextLineHeight());
-            Frame(settings, false);
-            Frame(settings, true);
-            Frame(settings, false);
-            Check(EditorState.CurrentSelection is SceneSettingsSelection && EditorState.SelectedObjects.Count == 0,
-                "Scene settings can be selected in the hierarchy");
             Frame(first, false);
             Frame(first, true);
             Frame(first, false);

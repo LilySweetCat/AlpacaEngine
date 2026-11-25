@@ -37,6 +37,21 @@ public static class Viewport
 
         if (ImGui.Checkbox("Local", ref Gizmo.Local)) Gizmo.Cancel();
 
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Use local axes instead of world axes. Individual Origins uses each object's local axes; other pivots use the active object's axes.");
+
+        var pivot = (int)Gizmo.Pivot;
+        ImGui.SetNextItemWidth(180);
+
+        if (ImGui.Combo("Pivot", ref pivot, "Selection Center\0Individual Origins\0Active Object\0"))
+        {
+            Gizmo.Cancel();
+            Gizmo.Pivot = (Gizmo.PivotPoint)pivot;
+        }
+
+        if (ImGui.IsItemHovered())
+            ImGui.SetTooltip("Selection Center: average world position. Individual Origins: each object's origin. Active Object: last selected origin.");
+
         if (!ImGui.IsWindowCollapsed())
         {
             var avail = ImGui.GetContentRegionAvail();
